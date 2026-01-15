@@ -39,19 +39,15 @@ class EditServerStates(StatesGroup):
 @router.message(Command("start"))
 async def cmd_start(message: Message):
     text = (
-        "<b>Добро пожаловать в Server Manager Bot!</b>\n\n"
-        "Этот бот поможет вам:\n"
-        "- Отслеживать сроки оплаты серверов\n"
-        "- Получать напоминания об оплате\n"
-        "- Мониторить доступность серверов\n"
-        "- Вести статистику расходов\n\n"
-        "Используйте меню ниже или команды:\n"
-        "/add - добавить сервер\n"
-        "/list - список серверов\n"
-        "/expiring - истекающие серверы\n"
-        "/stats - статистика\n"
-        "/settings - настройки\n"
-        "/help - справка"
+        "🖥 <b>Server Manager</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Управляйте серверами легко:\n\n"
+        "📋 Отслеживайте сроки оплаты\n"
+        "🔔 Получайте напоминания\n"
+        "📡 Мониторьте доступность\n"
+        "📊 Анализируйте расходы\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "Выберите действие:"
     )
     await message.answer(text, reply_markup=get_main_menu(), parse_mode="HTML")
 
@@ -59,21 +55,23 @@ async def cmd_start(message: Message):
 @router.message(Command("help"))
 async def cmd_help(message: Message):
     text = (
-        "<b>Справка по командам:</b>\n\n"
-        "/start - главное меню\n"
-        "/add - добавить новый сервер\n"
-        "/list - список всех серверов\n"
-        "/expiring - серверы с истекающей оплатой\n"
-        "/stats - статистика расходов\n"
-        "/settings - настройки напоминаний\n"
-        "/help - эта справка\n\n"
+        "📖 <b>Справка</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "<b>Команды:</b>\n"
+        "├ /start — главное меню\n"
+        "├ /add — добавить сервер\n"
+        "├ /list — список серверов\n"
+        "├ /expiring — срочные к оплате\n"
+        "├ /stats — статистика\n"
+        "├ /settings — настройки\n"
+        "└ /help — эта справка\n\n"
         "<b>Как добавить сервер:</b>\n"
-        "1. Введите /add или нажмите кнопку\n"
-        "2. Следуйте инструкциям бота\n"
-        "3. Обязательные поля: название, хостинг, дата, цена\n\n"
+        "1️⃣ Нажмите «➕ Добавить»\n"
+        "2️⃣ Введите данные пошагово\n"
+        "3️⃣ Обязательно: название, хостинг, дата, цена\n\n"
         "<b>Напоминания:</b>\n"
-        "Бот автоматически напомнит об оплате за N дней\n"
-        "(настраивается в /settings)"
+        "🔔 Бот напомнит за N дней до оплаты\n"
+        "⚙️ Настройте в разделе «Настройки»"
     )
     await message.answer(text, parse_mode="HTML", reply_markup=get_back_keyboard())
 
@@ -81,7 +79,11 @@ async def cmd_help(message: Message):
 @router.callback_query(F.data == "main_menu")
 async def cb_main_menu(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-    text = "Главное меню:"
+    text = (
+        "🖥 <b>Server Manager</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Выберите действие:"
+    )
     await callback.message.edit_text(text, reply_markup=get_main_menu(), parse_mode="HTML")
     await callback.answer()
 
@@ -92,7 +94,7 @@ async def cb_main_menu(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "add_server")
 async def start_add_server(event: Message | CallbackQuery, state: FSMContext):
     await state.set_state(AddServerStates.name)
-    text = "Введите <b>название</b> сервера:"
+    text = "📝 Введите <b>название</b> сервера:"
 
     if isinstance(event, CallbackQuery):
         await event.message.edit_text(text, reply_markup=get_cancel_keyboard(), parse_mode="HTML")
@@ -106,7 +108,8 @@ async def process_name(message: Message, state: FSMContext):
     await state.update_data(name=message.text.strip())
     await state.set_state(AddServerStates.hosting)
     await message.answer(
-        "Введите название <b>хостинга</b> (например: Hetzner, DigitalOcean):",
+        "🏢 Введите название <b>хостинга</b>:\n"
+        "<i>Например: Hetzner, DigitalOcean, Timeweb</i>",
         reply_markup=get_cancel_keyboard(),
         parse_mode="HTML"
     )
@@ -117,7 +120,8 @@ async def process_hosting(message: Message, state: FSMContext):
     await state.update_data(hosting=message.text.strip())
     await state.set_state(AddServerStates.expiry_date)
     await message.answer(
-        "Введите <b>дату окончания оплаты</b> (формат: ДД.ММ.ГГГГ):",
+        "📅 Введите <b>дату окончания оплаты</b>:\n"
+        "<i>Формат: ДД.ММ.ГГГГ (например: 25.12.2026)</i>",
         reply_markup=get_cancel_keyboard(),
         parse_mode="HTML"
     )
@@ -128,15 +132,19 @@ async def process_expiry_date(message: Message, state: FSMContext):
     date_obj = parse_date(message.text.strip())
     if not date_obj:
         await message.answer(
-            "Неверный формат даты. Используйте ДД.ММ.ГГГГ (например: 25.12.2024):",
-            reply_markup=get_cancel_keyboard()
+            "❌ Неверный формат даты\n\n"
+            "Используйте: <b>ДД.ММ.ГГГГ</b>\n"
+            "<i>Например: 25.12.2026</i>",
+            reply_markup=get_cancel_keyboard(),
+            parse_mode="HTML"
         )
         return
 
     await state.update_data(expiry_date=date_obj)
     await state.set_state(AddServerStates.price)
     await message.answer(
-        "Введите <b>стоимость</b> (число):",
+        "💰 Введите <b>стоимость</b>:\n"
+        "<i>Например: 1500 или 29.99</i>",
         reply_markup=get_cancel_keyboard(),
         parse_mode="HTML"
     )
@@ -147,15 +155,17 @@ async def process_price(message: Message, state: FSMContext):
     price = parse_price(message.text.strip())
     if price is None:
         await message.answer(
-            "Неверный формат. Введите число (например: 1500 или 29.99):",
-            reply_markup=get_cancel_keyboard()
+            "❌ Неверный формат\n\n"
+            "Введите число: <b>1500</b> или <b>29.99</b>",
+            reply_markup=get_cancel_keyboard(),
+            parse_mode="HTML"
         )
         return
 
     await state.update_data(price=price)
     await state.set_state(AddServerStates.currency)
     await message.answer(
-        "Выберите <b>валюту</b>:",
+        "💵 Выберите <b>валюту</b>:",
         reply_markup=get_currency_keyboard(),
         parse_mode="HTML"
     )
@@ -167,7 +177,7 @@ async def process_currency(callback: CallbackQuery, state: FSMContext):
     await state.update_data(currency=currency)
     await state.set_state(AddServerStates.period)
     await callback.message.edit_text(
-        "Выберите <b>период оплаты</b>:",
+        "📆 Выберите <b>период оплаты</b>:",
         reply_markup=get_period_keyboard(),
         parse_mode="HTML"
     )
@@ -180,7 +190,8 @@ async def process_period(callback: CallbackQuery, state: FSMContext):
     await state.update_data(period=period)
     await state.set_state(AddServerStates.ip)
     await callback.message.edit_text(
-        "Введите <b>IP адрес</b> сервера (или нажмите Пропустить):",
+        "🌐 Введите <b>IP адрес</b> сервера:\n"
+        "<i>Или нажмите «Пропустить»</i>",
         reply_markup=get_skip_keyboard("ip"),
         parse_mode="HTML"
     )
@@ -192,7 +203,8 @@ async def process_ip(message: Message, state: FSMContext):
     await state.update_data(ip=message.text.strip())
     await state.set_state(AddServerStates.url)
     await message.answer(
-        "Введите <b>URL</b> для мониторинга (или нажмите Пропустить):",
+        "🔗 Введите <b>URL</b> для мониторинга:\n"
+        "<i>Например: https://example.com</i>",
         reply_markup=get_skip_keyboard("url"),
         parse_mode="HTML"
     )
@@ -203,7 +215,8 @@ async def skip_ip(callback: CallbackQuery, state: FSMContext):
     await state.update_data(ip=None)
     await state.set_state(AddServerStates.url)
     await callback.message.edit_text(
-        "Введите <b>URL</b> для мониторинга (или нажмите Пропустить):",
+        "🔗 Введите <b>URL</b> для мониторинга:\n"
+        "<i>Например: https://example.com</i>",
         reply_markup=get_skip_keyboard("url"),
         parse_mode="HTML"
     )
@@ -215,7 +228,8 @@ async def process_url(message: Message, state: FSMContext):
     await state.update_data(url=message.text.strip())
     await state.set_state(AddServerStates.notes)
     await message.answer(
-        "Введите <b>заметки</b> (или нажмите Пропустить):",
+        "📋 Введите <b>заметки</b>:\n"
+        "<i>Любая полезная информация</i>",
         reply_markup=get_skip_keyboard("notes"),
         parse_mode="HTML"
     )
@@ -226,7 +240,8 @@ async def skip_url(callback: CallbackQuery, state: FSMContext):
     await state.update_data(url=None)
     await state.set_state(AddServerStates.notes)
     await callback.message.edit_text(
-        "Введите <b>заметки</b> (или нажмите Пропустить):",
+        "📋 Введите <b>заметки</b>:\n"
+        "<i>Любая полезная информация</i>",
         reply_markup=get_skip_keyboard("notes"),
         parse_mode="HTML"
     )
@@ -238,7 +253,8 @@ async def process_notes(message: Message, state: FSMContext):
     await state.update_data(notes=message.text.strip())
     await state.set_state(AddServerStates.tags)
     await message.answer(
-        "Введите <b>теги</b> через запятую (или нажмите Пропустить):",
+        "🏷 Введите <b>теги</b> через запятую:\n"
+        "<i>Например: production, api, важный</i>",
         reply_markup=get_skip_keyboard("tags"),
         parse_mode="HTML"
     )
@@ -249,7 +265,8 @@ async def skip_notes(callback: CallbackQuery, state: FSMContext):
     await state.update_data(notes=None)
     await state.set_state(AddServerStates.tags)
     await callback.message.edit_text(
-        "Введите <b>теги</b> через запятую (или нажмите Пропустить):",
+        "🏷 Введите <b>теги</b> через запятую:\n"
+        "<i>Например: production, api, важный</i>",
         reply_markup=get_skip_keyboard("tags"),
         parse_mode="HTML"
     )
@@ -289,7 +306,7 @@ async def finish_add_server(event: Message | CallbackQuery, state: FSMContext):
     await state.clear()
 
     server = await db.get_server(server_id, user_id)
-    text = f"Сервер добавлен!\n\n{format_server_info(server, detailed=True)}"
+    text = f"✅ <b>Сервер добавлен!</b>\n\n{format_server_info(server, detailed=True)}"
 
     if isinstance(event, CallbackQuery):
         await event.message.edit_text(
@@ -297,7 +314,7 @@ async def finish_add_server(event: Message | CallbackQuery, state: FSMContext):
             reply_markup=get_server_detail_keyboard(server),
             parse_mode="HTML"
         )
-        await event.answer()
+        await event.answer("Готово!")
     else:
         await event.answer(
             text,
@@ -309,7 +326,11 @@ async def finish_add_server(event: Message | CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "cancel")
 async def cancel_action(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-    await callback.message.edit_text("Действие отменено.", reply_markup=get_main_menu())
+    await callback.message.edit_text(
+        "❌ <b>Действие отменено</b>",
+        reply_markup=get_main_menu(),
+        parse_mode="HTML"
+    )
     await callback.answer()
 
 
@@ -342,7 +363,7 @@ async def cb_server_detail(callback: CallbackQuery):
     server = await db.get_server(server_id, callback.from_user.id)
 
     if not server:
-        await callback.answer("Сервер не найден", show_alert=True)
+        await callback.answer("❌ Сервер не найден", show_alert=True)
         return
 
     text = format_server_info(server, detailed=True)
@@ -363,16 +384,17 @@ async def cb_mark_paid(callback: CallbackQuery):
 
     if new_date:
         server = await db.get_server(server_id, callback.from_user.id)
-        text = f"Оплата отмечена! Новая дата: {new_date.strftime('%d.%m.%Y')}\n\n"
+        text = f"✅ <b>Оплата отмечена!</b>\n\n"
+        text += f"📅 Новая дата: <b>{new_date.strftime('%d.%m.%Y')}</b>\n\n"
         text += format_server_info(server, detailed=True)
         await callback.message.edit_text(
             text,
             reply_markup=get_server_detail_keyboard(server),
             parse_mode="HTML"
         )
-        await callback.answer("Оплата отмечена!")
+        await callback.answer("✅ Оплата отмечена!")
     else:
-        await callback.answer("Ошибка", show_alert=True)
+        await callback.answer("❌ Ошибка", show_alert=True)
 
 
 # === Удаление ===
@@ -383,11 +405,13 @@ async def cb_delete_server(callback: CallbackQuery):
     server = await db.get_server(server_id, callback.from_user.id)
 
     if not server:
-        await callback.answer("Сервер не найден", show_alert=True)
+        await callback.answer("❌ Сервер не найден", show_alert=True)
         return
 
     await callback.message.edit_text(
-        f"Вы уверены, что хотите удалить сервер <b>{server.name}</b>?",
+        f"🗑 <b>Удалить сервер?</b>\n\n"
+        f"Вы уверены, что хотите удалить\n"
+        f"<b>{server.name}</b>?",
         reply_markup=get_delete_confirm_keyboard(server_id),
         parse_mode="HTML"
     )
@@ -401,12 +425,13 @@ async def cb_confirm_delete(callback: CallbackQuery):
 
     if success:
         await callback.message.edit_text(
-            "Сервер удалён.",
-            reply_markup=get_back_keyboard("list_servers")
+            "🗑 <b>Сервер удалён</b>",
+            reply_markup=get_back_keyboard("list_servers"),
+            parse_mode="HTML"
         )
         await callback.answer("Удалено!")
     else:
-        await callback.answer("Ошибка удаления", show_alert=True)
+        await callback.answer("❌ Ошибка удаления", show_alert=True)
 
 
 # === Редактирование ===
@@ -421,11 +446,13 @@ async def cb_edit_server(callback: CallbackQuery):
     server = await db.get_server(server_id, callback.from_user.id)
 
     if not server:
-        await callback.answer("Сервер не найден", show_alert=True)
+        await callback.answer("❌ Сервер не найден", show_alert=True)
         return
 
     await callback.message.edit_text(
-        f"Редактирование <b>{server.name}</b>\nВыберите поле:",
+        f"✏️ <b>Редактирование</b>\n\n"
+        f"Сервер: <b>{server.name}</b>\n\n"
+        f"Выберите поле:",
         reply_markup=get_edit_server_keyboard(server_id),
         parse_mode="HTML"
     )
@@ -439,21 +466,22 @@ async def cb_edit_field(callback: CallbackQuery, state: FSMContext):
     server_id = int(parts[2])
 
     field_names = {
-        "name": "название",
-        "hosting": "хостинг",
-        "ip": "IP адрес",
-        "url": "URL",
-        "expiry": "дату оплаты (ДД.ММ.ГГГГ)",
-        "price": "цену",
-        "notes": "заметки",
-        "tags": "теги"
+        "name": ("📝", "название"),
+        "hosting": ("🏢", "хостинг"),
+        "ip": ("🌐", "IP адрес"),
+        "url": ("🔗", "URL"),
+        "expiry": ("📅", "дату оплаты (ДД.ММ.ГГГГ)"),
+        "price": ("💰", "цену"),
+        "notes": ("📋", "заметки"),
+        "tags": ("🏷", "теги")
     }
 
+    emoji, name = field_names[field]
     await state.set_state(EditServerStates.waiting_value)
     await state.update_data(edit_field=field, edit_server_id=server_id)
 
     await callback.message.edit_text(
-        f"Введите новое значение для поля <b>{field_names[field]}</b>:",
+        f"{emoji} Введите новое значение для поля\n<b>{name}</b>:",
         reply_markup=get_cancel_keyboard(),
         parse_mode="HTML"
     )
@@ -474,13 +502,23 @@ async def process_edit_value(message: Message, state: FSMContext):
     if field == "expiry":
         date_obj = parse_date(value)
         if not date_obj:
-            await message.answer("Неверный формат даты. Используйте ДД.ММ.ГГГГ:")
+            await message.answer(
+                "❌ Неверный формат даты\n\n"
+                "Используйте: <b>ДД.ММ.ГГГГ</b>",
+                reply_markup=get_cancel_keyboard(),
+                parse_mode="HTML"
+            )
             return
         update_data['expiry_date'] = date_obj
     elif field == "price":
         price = parse_price(value)
         if price is None:
-            await message.answer("Неверный формат. Введите число:")
+            await message.answer(
+                "❌ Неверный формат\n\n"
+                "Введите число",
+                reply_markup=get_cancel_keyboard(),
+                parse_mode="HTML"
+            )
             return
         update_data['price'] = price
     else:
@@ -491,10 +529,14 @@ async def process_edit_value(message: Message, state: FSMContext):
     if success:
         await state.clear()
         server = await db.get_server(server_id, user_id)
-        text = f"Обновлено!\n\n{format_server_info(server, detailed=True)}"
+        text = f"✅ <b>Обновлено!</b>\n\n{format_server_info(server, detailed=True)}"
         await message.answer(text, reply_markup=get_server_detail_keyboard(server), parse_mode="HTML")
     else:
-        await message.answer("Ошибка обновления", reply_markup=get_cancel_keyboard())
+        await message.answer(
+            "❌ Ошибка обновления",
+            reply_markup=get_cancel_keyboard(),
+            parse_mode="HTML"
+        )
 
 
 # === Мониторинг ===
@@ -505,11 +547,11 @@ async def cb_toggle_monitoring(callback: CallbackQuery):
     server = await db.get_server(server_id, callback.from_user.id)
 
     if not server:
-        await callback.answer("Сервер не найден", show_alert=True)
+        await callback.answer("❌ Сервер не найден", show_alert=True)
         return
 
     if not server.ip and not server.url:
-        await callback.answer("Для мониторинга нужен IP или URL", show_alert=True)
+        await callback.answer("⚠️ Для мониторинга нужен IP или URL", show_alert=True)
         return
 
     new_value = not server.is_monitoring
@@ -523,8 +565,8 @@ async def cb_toggle_monitoring(callback: CallbackQuery):
         parse_mode="HTML"
     )
 
-    status = "включён" if new_value else "выключен"
-    await callback.answer(f"Мониторинг {status}")
+    status = "🟢 включён" if new_value else "⚫ выключен"
+    await callback.answer(f"📡 Мониторинг {status}")
 
 
 # === Истекающие серверы ===
@@ -550,8 +592,10 @@ async def cb_expiring_servers(callback: CallbackQuery):
 async def cmd_settings(message: Message):
     settings = await db.get_settings(message.from_user.id)
     text = (
-        f"<b>Настройки напоминаний</b>\n\n"
-        f"Напоминать за: {settings.reminder_days} дней до окончания оплаты\n\n"
+        f"⚙️ <b>Настройки</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🔔 Напоминать за <b>{settings.reminder_days}</b> дней\n"
+        f"до окончания оплаты\n\n"
         f"Выберите новое значение:"
     )
     await message.answer(text, reply_markup=get_settings_keyboard(settings.reminder_days), parse_mode="HTML")
@@ -561,8 +605,10 @@ async def cmd_settings(message: Message):
 async def cb_settings(callback: CallbackQuery):
     settings = await db.get_settings(callback.from_user.id)
     text = (
-        f"<b>Настройки напоминаний</b>\n\n"
-        f"Напоминать за: {settings.reminder_days} дней до окончания оплаты\n\n"
+        f"⚙️ <b>Настройки</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🔔 Напоминать за <b>{settings.reminder_days}</b> дней\n"
+        f"до окончания оплаты\n\n"
         f"Выберите новое значение:"
     )
     await callback.message.edit_text(
@@ -579,8 +625,10 @@ async def cb_set_reminder_days(callback: CallbackQuery):
     await db.update_settings(callback.from_user.id, reminder_days=days)
 
     text = (
-        f"<b>Настройки напоминаний</b>\n\n"
-        f"Напоминать за: {days} дней до окончания оплаты\n\n"
+        f"⚙️ <b>Настройки</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🔔 Напоминать за <b>{days}</b> дней\n"
+        f"до окончания оплаты\n\n"
         f"Выберите новое значение:"
     )
     await callback.message.edit_text(
@@ -588,7 +636,7 @@ async def cb_set_reminder_days(callback: CallbackQuery):
         reply_markup=get_settings_keyboard(days),
         parse_mode="HTML"
     )
-    await callback.answer(f"Установлено: {days} дней")
+    await callback.answer(f"✅ Установлено: {days} дней")
 
 
 @router.callback_query(F.data == "current_days")

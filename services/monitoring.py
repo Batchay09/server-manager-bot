@@ -102,22 +102,27 @@ class MonitoringService:
     async def _notify_status_change(self, server: Server, is_online: bool):
         """Отправляет уведомление об изменении статуса."""
         if is_online:
-            status = "ОНЛАЙН"
-            emoji = ""
+            status = "🟢 ОНЛАЙН"
+            header = "✅ Сервер снова доступен"
         else:
-            status = "НЕДОСТУПЕН"
-            emoji = ""
+            status = "🔴 НЕДОСТУПЕН"
+            header = "⚠️ Сервер недоступен"
 
         text = (
-            f"{emoji} <b>Изменение статуса сервера</b>\n\n"
-            f"Сервер: <b>{server.name}</b> ({server.hosting})\n"
-            f"Статус: {status}\n"
+            f"┌{'─' * 26}\n"
+            f"│ {header}\n"
+            f"├{'─' * 26}\n"
+            f"│ 🖥 <b>{server.name}</b>\n"
+            f"│ 🏢 {server.hosting}\n"
+            f"│ 📡 Статус: {status}\n"
         )
 
         if server.ip:
-            text += f"IP: <code>{server.ip}</code>\n"
+            text += f"│ 🌐 <code>{server.ip}</code>\n"
         if server.url:
-            text += f"URL: {server.url}\n"
+            text += f"│ 🔗 {server.url}\n"
+
+        text += f"└{'─' * 26}"
 
         try:
             await self.bot.send_message(server.user_id, text, parse_mode="HTML")
