@@ -610,7 +610,7 @@ async def cb_server_detail(callback: CallbackQuery):
 
 # === Оплата ===
 
-@router.callback_query(F.data.startswith("paid_") & ~F.data.startswith("pay_"))
+@router.callback_query(F.data.regexp(r"^paid_\d+$"))
 async def cb_mark_paid(callback: CallbackQuery):
     """Показывает диалог подтверждения оплаты."""
     server_id = int(callback.data.split("_")[1])
@@ -923,11 +923,7 @@ async def cb_confirm_delete(callback: CallbackQuery):
 
 # === Редактирование ===
 
-@router.callback_query(F.data.startswith("edit_") & ~F.data.startswith("edit_name_") &
-                        ~F.data.startswith("edit_hosting_") & ~F.data.startswith("edit_location_") &
-                        ~F.data.startswith("edit_ip_") & ~F.data.startswith("edit_url_") &
-                        ~F.data.startswith("edit_expiry_") & ~F.data.startswith("edit_price_") &
-                        ~F.data.startswith("edit_notes_") & ~F.data.startswith("edit_tags_"))
+@router.callback_query(F.data.regexp(r"^edit_\d+$"))
 async def cb_edit_server(callback: CallbackQuery):
     server_id = int(callback.data.split("_")[1])
     server = await db.get_server(server_id, callback.from_user.id)
