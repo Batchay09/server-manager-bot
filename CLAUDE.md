@@ -45,6 +45,16 @@ Two tables: `servers` (id, user_id, name, hosting, location, ip, url, expiry_dat
 
 Copy `.env.example` to `.env` and set `BOT_TOKEN` from @BotFather.
 
+## Быстрые команды
+
+**"деплой"** или **"релиз"** — выполнить полный цикл:
+1. Обновить VERSION (инкремент)
+2. Обновить CHANGELOG.md
+3. Git add + commit + push
+4. Deploy на VPS (ssh + git pull + restart)
+
+---
+
 ## Git Workflow (ОБЯЗАТЕЛЬНО)
 
 При коммите изменений **ВСЕГДА** выполняй:
