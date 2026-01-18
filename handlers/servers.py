@@ -9,10 +9,11 @@ from keyboards import (
     get_main_menu, get_server_list_keyboard, get_server_detail_keyboard,
     get_delete_confirm_keyboard, get_edit_server_keyboard, get_currency_keyboard,
     get_period_keyboard, get_cancel_keyboard, get_skip_keyboard, get_settings_keyboard,
-    get_back_keyboard
+    get_back_keyboard, get_hosting_choice_keyboard, get_location_choice_keyboard,
+    get_price_choice_keyboard, get_server_list_keyboard_with_sort
 )
 from utils import (
-    format_server_info, format_server_list, format_expiring_servers,
+    format_server_info, format_server_list_sorted, format_expiring_servers,
     parse_date, parse_price
 )
 
@@ -21,9 +22,13 @@ router = Router()
 
 class AddServerStates(StatesGroup):
     name = State()
-    hosting = State()
+    hosting_choice = State()  # Выбор из существующих хостингов
+    hosting_new = State()     # Ввод нового хостинга
+    location_choice = State() # Выбор из существующих локаций
+    location_new = State()    # Ввод новой локации
     expiry_date = State()
-    price = State()
+    price_choice = State()    # Выбор из существующих цен
+    price_new = State()       # Ввод новой цены
     currency = State()
     period = State()
     ip = State()
@@ -106,25 +111,126 @@ async def start_add_server(event: Message | CallbackQuery, state: FSMContext):
 @router.message(AddServerStates.name)
 async def process_name(message: Message, state: FSMContext):
     await state.update_data(name=message.text.strip())
-    await state.set_state(AddServerStates.hosting)
-    await message.answer(
+    user_id = message.from_user.id
+
+    # Получаем существующие хостинги
+    hostings = await db.get_unique_hostings(user_id)
+
+    if hostings:
+        await state.set_state(AddServerStates.hosting_choice)
+        await message.answer(
+            "🏢 Выберите <b>хостинг</b> или добавьте новый:",
+            reply_markup=get_hosting_choice_keyboard(hostings),
+            parse_mode="HTML"
+        )
+    else:
+        await state.set_state(AddServerStates.hosting_new)
+        await message.answer(
+            "🏢 Введите название <b>хостинга</b>:\n"
+            "<i>Например: Hetzner, DigitalOcean, Timeweb</i>",
+            reply_markup=get_cancel_keyboard(),
+            parse_mode="HTML"
+        )
+
+
+@router.callback_query(AddServerStates.hosting_choice, F.data.startswith("select_hosting_"))
+async def process_hosting_select(callback: CallbackQuery, state: FSMContext):
+    hosting = callback.data.replace("select_hosting_", "")
+    await state.update_data(hosting=hosting)
+    await ask_location(callback, state)
+    await callback.answer()
+
+
+@router.callback_query(AddServerStates.hosting_choice, F.data == "new_hosting")
+async def process_hosting_new_choice(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(AddServerStates.hosting_new)
+    await callback.message.edit_text(
         "🏢 Введите название <b>хостинга</b>:\n"
         "<i>Например: Hetzner, DigitalOcean, Timeweb</i>",
         reply_markup=get_cancel_keyboard(),
         parse_mode="HTML"
     )
+    await callback.answer()
 
 
-@router.message(AddServerStates.hosting)
-async def process_hosting(message: Message, state: FSMContext):
+@router.message(AddServerStates.hosting_new)
+async def process_hosting_input(message: Message, state: FSMContext):
     await state.update_data(hosting=message.text.strip())
-    await state.set_state(AddServerStates.expiry_date)
-    await message.answer(
-        "📅 Введите <b>дату окончания оплаты</b>:\n"
-        "<i>Формат: ДД.ММ.ГГГГ (например: 25.12.2026)</i>",
-        reply_markup=get_cancel_keyboard(),
+    await ask_location(message, state)
+
+
+async def ask_location(event: Message | CallbackQuery, state: FSMContext):
+    """Запрашивает локацию."""
+    user_id = event.from_user.id
+    locations = await db.get_unique_locations(user_id)
+
+    text = "📍 Выберите <b>локацию</b> сервера:"
+
+    if locations:
+        await state.set_state(AddServerStates.location_choice)
+        keyboard = get_location_choice_keyboard(locations)
+    else:
+        # Если нет локаций, показываем только кнопки "Новая" и "Пропустить"
+        await state.set_state(AddServerStates.location_choice)
+        keyboard = get_location_choice_keyboard([])
+
+    if isinstance(event, CallbackQuery):
+        await event.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+    else:
+        await event.answer(text, reply_markup=keyboard, parse_mode="HTML")
+
+
+@router.callback_query(AddServerStates.location_choice, F.data.startswith("select_location_"))
+async def process_location_select(callback: CallbackQuery, state: FSMContext):
+    location = callback.data.replace("select_location_", "")
+    await state.update_data(location=location)
+    await ask_expiry_date(callback, state)
+    await callback.answer()
+
+
+@router.callback_query(AddServerStates.location_choice, F.data == "new_location")
+async def process_location_new_choice(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(AddServerStates.location_new)
+    await callback.message.edit_text(
+        "📍 Введите <b>локацию</b> сервера:\n"
+        "<i>Например: Frankfurt, Amsterdam, Moscow</i>",
+        reply_markup=get_skip_keyboard("location"),
         parse_mode="HTML"
     )
+    await callback.answer()
+
+
+@router.callback_query(AddServerStates.location_choice, F.data == "skip_location")
+async def process_location_skip(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(location=None)
+    await ask_expiry_date(callback, state)
+    await callback.answer()
+
+
+@router.message(AddServerStates.location_new)
+async def process_location_input(message: Message, state: FSMContext):
+    await state.update_data(location=message.text.strip())
+    await ask_expiry_date(message, state)
+
+
+@router.callback_query(AddServerStates.location_new, F.data == "skip_location")
+async def process_location_new_skip(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(location=None)
+    await ask_expiry_date(callback, state)
+    await callback.answer()
+
+
+async def ask_expiry_date(event: Message | CallbackQuery, state: FSMContext):
+    """Запрашивает дату оплаты."""
+    await state.set_state(AddServerStates.expiry_date)
+    text = (
+        "📅 Введите <b>дату окончания оплаты</b>:\n"
+        "<i>Формат: ДД.ММ.ГГГГ (например: 25.12.2026)</i>"
+    )
+    if isinstance(event, CallbackQuery):
+        await event.message.edit_text(text, reply_markup=get_cancel_keyboard(), parse_mode="HTML")
+    else:
+        await event.answer(text, reply_markup=get_cancel_keyboard(), parse_mode="HTML")
 
 
 @router.message(AddServerStates.expiry_date)
@@ -141,17 +247,58 @@ async def process_expiry_date(message: Message, state: FSMContext):
         return
 
     await state.update_data(expiry_date=date_obj)
-    await state.set_state(AddServerStates.price)
-    await message.answer(
+    await ask_price(message, state)
+
+
+async def ask_price(event: Message | CallbackQuery, state: FSMContext):
+    """Запрашивает цену."""
+    user_id = event.from_user.id
+    prices = await db.get_unique_prices(user_id)
+
+    if prices:
+        await state.set_state(AddServerStates.price_choice)
+        text = "💰 Выберите <b>стоимость</b> или введите новую:"
+        keyboard = get_price_choice_keyboard(prices)
+    else:
+        await state.set_state(AddServerStates.price_new)
+        text = "💰 Введите <b>стоимость</b>:\n<i>Например: 1500 или 29.99</i>"
+        keyboard = get_cancel_keyboard()
+
+    if isinstance(event, CallbackQuery):
+        await event.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+    else:
+        await event.answer(text, reply_markup=keyboard, parse_mode="HTML")
+
+
+@router.callback_query(AddServerStates.price_choice, F.data.startswith("select_price_"))
+async def process_price_select(callback: CallbackQuery, state: FSMContext):
+    parts = callback.data.replace("select_price_", "").rsplit("_", 1)
+    price = float(parts[0])
+    currency = parts[1]
+    await state.update_data(price=price, currency=currency)
+    await state.set_state(AddServerStates.period)
+    await callback.message.edit_text(
+        "📆 Выберите <b>период оплаты</b>:",
+        reply_markup=get_period_keyboard(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(AddServerStates.price_choice, F.data == "new_price")
+async def process_price_new_choice(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(AddServerStates.price_new)
+    await callback.message.edit_text(
         "💰 Введите <b>стоимость</b>:\n"
         "<i>Например: 1500 или 29.99</i>",
         reply_markup=get_cancel_keyboard(),
         parse_mode="HTML"
     )
+    await callback.answer()
 
 
-@router.message(AddServerStates.price)
-async def process_price(message: Message, state: FSMContext):
+@router.message(AddServerStates.price_new)
+async def process_price_input(message: Message, state: FSMContext):
     price = parse_price(message.text.strip())
     if price is None:
         await message.answer(
@@ -297,6 +444,7 @@ async def finish_add_server(event: Message | CallbackQuery, state: FSMContext):
         price=data['price'],
         currency=data['currency'],
         payment_period=data['period'],
+        location=data.get('location'),
         ip=data.get('ip'),
         url=data.get('url'),
         notes=data.get('notes'),
@@ -337,22 +485,41 @@ async def cancel_action(callback: CallbackQuery, state: FSMContext):
 # === Список серверов ===
 
 @router.message(Command("list"))
-async def cmd_list(message: Message):
+async def cmd_list(message: Message, state: FSMContext):
     servers = await db.get_all_servers(message.from_user.id)
-    text = format_server_list(servers)
-    await message.answer(text, reply_markup=get_server_list_keyboard(servers), parse_mode="HTML")
+    data = await state.get_data()
+    current_sort = data.get('sort', 'date')
+    text = format_server_list_sorted(servers, current_sort)
+    await message.answer(text, reply_markup=get_server_list_keyboard_with_sort(servers, current_sort), parse_mode="HTML")
 
 
 @router.callback_query(F.data == "list_servers")
-async def cb_list_servers(callback: CallbackQuery):
+async def cb_list_servers(callback: CallbackQuery, state: FSMContext):
     servers = await db.get_all_servers(callback.from_user.id)
-    text = format_server_list(servers)
+    data = await state.get_data()
+    current_sort = data.get('sort', 'date')
+    text = format_server_list_sorted(servers, current_sort)
     await callback.message.edit_text(
         text,
-        reply_markup=get_server_list_keyboard(servers),
+        reply_markup=get_server_list_keyboard_with_sort(servers, current_sort),
         parse_mode="HTML"
     )
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("sort_"))
+async def cb_sort_servers(callback: CallbackQuery, state: FSMContext):
+    sort_type = callback.data.replace("sort_", "")
+    await state.update_data(sort=sort_type)
+
+    servers = await db.get_all_servers(callback.from_user.id)
+    text = format_server_list_sorted(servers, sort_type)
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_server_list_keyboard_with_sort(servers, sort_type),
+        parse_mode="HTML"
+    )
+    await callback.answer(f"Сортировка: {sort_type}")
 
 
 # === Детали сервера ===
@@ -437,10 +604,10 @@ async def cb_confirm_delete(callback: CallbackQuery):
 # === Редактирование ===
 
 @router.callback_query(F.data.startswith("edit_") & ~F.data.startswith("edit_name_") &
-                        ~F.data.startswith("edit_hosting_") & ~F.data.startswith("edit_ip_") &
-                        ~F.data.startswith("edit_url_") & ~F.data.startswith("edit_expiry_") &
-                        ~F.data.startswith("edit_price_") & ~F.data.startswith("edit_notes_") &
-                        ~F.data.startswith("edit_tags_"))
+                        ~F.data.startswith("edit_hosting_") & ~F.data.startswith("edit_location_") &
+                        ~F.data.startswith("edit_ip_") & ~F.data.startswith("edit_url_") &
+                        ~F.data.startswith("edit_expiry_") & ~F.data.startswith("edit_price_") &
+                        ~F.data.startswith("edit_notes_") & ~F.data.startswith("edit_tags_"))
 async def cb_edit_server(callback: CallbackQuery):
     server_id = int(callback.data.split("_")[1])
     server = await db.get_server(server_id, callback.from_user.id)
@@ -459,7 +626,7 @@ async def cb_edit_server(callback: CallbackQuery):
     await callback.answer()
 
 
-@router.callback_query(F.data.regexp(r"edit_(name|hosting|ip|url|expiry|price|notes|tags)_\d+"))
+@router.callback_query(F.data.regexp(r"edit_(name|hosting|location|ip|url|expiry|price|notes|tags)_\d+"))
 async def cb_edit_field(callback: CallbackQuery, state: FSMContext):
     parts = callback.data.split("_")
     field = parts[1]
@@ -468,6 +635,7 @@ async def cb_edit_field(callback: CallbackQuery, state: FSMContext):
     field_names = {
         "name": ("📝", "название"),
         "hosting": ("🏢", "хостинг"),
+        "location": ("📍", "локацию"),
         "ip": ("🌐", "IP адрес"),
         "url": ("🔗", "URL"),
         "expiry": ("📅", "дату оплаты (ДД.ММ.ГГГГ)"),

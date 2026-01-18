@@ -39,7 +39,7 @@ python bot.py
 `AddServerStates` and `EditServerStates` in `handlers/servers.py` manage multi-step forms using aiogram FSM.
 
 ### Database Schema
-Two tables: `servers` (id, user_id, name, hosting, ip, url, expiry_date, price, currency, payment_period, notes, tags, is_monitoring) and `settings` (user_id, reminder_days, reminder_time).
+Two tables: `servers` (id, user_id, name, hosting, location, ip, url, expiry_date, price, currency, payment_period, notes, tags, is_monitoring) and `settings` (user_id, reminder_days, reminder_time).
 
 ## Configuration
 
@@ -59,17 +59,46 @@ Helper functions in `utils.py`:
 - `get_status_text(days_left)` - returns status text
 - `get_progress_bar(days_left, max_days)` - returns visual bar
 
+## Deployment
+
+**Production VPS**: `155.212.144.230` (Beget, Ubuntu 24.04)
+- Путь: `/opt/server-manager-bot/`
+- Сервис: `systemctl status server-bot`
+- Автозапуск: включён через systemd
+
+**Команды на сервере**:
+```bash
+# Логи
+journalctl -u server-bot -f
+
+# Перезапуск
+systemctl restart server-bot
+
+# Обновление
+cd /opt/server-manager-bot && git pull && systemctl restart server-bot
+```
+
+**GitHub**: https://github.com/Batchay09/server-manager-bot
+
 ## Current Work / Notes
 
 <!-- Обновляй этот раздел для сохранения контекста между сессиями -->
 
-**Статус проекта**: Базовая функциональность + премиум UI готовы
+**Статус проекта**: Production — бот работает 24/7 на VPS
 - Добавление/редактирование/удаление серверов
 - Напоминания об оплате (APScheduler, ежедневно в 10:00)
 - Мониторинг доступности серверов (HTTP/TCP)
 - Статистика расходов по валютам и хостингам
 - Премиум визуальный стиль с эмодзи и прогресс-барами
+- Деплой на VPS с автозапуском
+- Умный ввод: выбор из существующих хостингов/локаций/цен
+- Поле локации для серверов
+- Сортировка списка (по дате, хостингу, локации)
+
+**Telegram**: @Ruulitbot
 
 **Последние изменения**:
+- 18.01.2026: Оптимизация ввода (выбор из существующих значений), поле локации, сортировка списка
+- 16.01.2026: Деплой на VPS (155.212.144.230), systemd сервис
 - 16.01.2026: UI redesign — премиум стиль, эмодзи, прогресс-бары, карточки
 - 15.01.2026: Инициализация проекта, создан CLAUDE.md

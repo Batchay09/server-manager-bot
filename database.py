@@ -12,6 +12,7 @@ class Server:
     user_id: int
     name: str
     hosting: str
+    location: Optional[str]
     ip: Optional[str]
     url: Optional[str]
     expiry_date: date
@@ -39,6 +40,7 @@ async def init_db():
                 user_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 hosting TEXT NOT NULL,
+                location TEXT,
                 ip TEXT,
                 url TEXT,
                 expiry_date DATE NOT NULL,
@@ -51,6 +53,12 @@ async def init_db():
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        # Миграция: добавляем location если колонка не существует
+        cursor = await db.execute("PRAGMA table_info(servers)")
+        columns = [row[1] for row in await cursor.fetchall()]
+        if 'location' not in columns:
+            await db.execute("ALTER TABLE servers ADD COLUMN location TEXT")
 
         await db.execute("""
             CREATE TABLE IF NOT EXISTS settings (
@@ -84,6 +92,7 @@ class Database:
         price: float,
         currency: str = "RUB",
         payment_period: str = "monthly",
+        location: Optional[str] = None,
         ip: Optional[str] = None,
         url: Optional[str] = None,
         notes: Optional[str] = None,
@@ -92,11 +101,11 @@ class Database:
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
                 """
-                INSERT INTO servers (user_id, name, hosting, ip, url, expiry_date,
+                INSERT INTO servers (user_id, name, hosting, location, ip, url, expiry_date,
                                      price, currency, payment_period, notes, tags)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (user_id, name, hosting, ip, url, expiry_date.isoformat(),
+                (user_id, name, hosting, location, ip, url, expiry_date.isoformat(),
                  price, currency, payment_period, notes, tags)
             )
             await db.commit()
@@ -170,7 +179,7 @@ class Database:
             return False
 
         allowed_fields = {
-            'name', 'hosting', 'ip', 'url', 'expiry_date', 'price',
+            'name', 'hosting', 'location', 'ip', 'url', 'expiry_date', 'price',
             'currency', 'payment_period', 'notes', 'tags', 'is_monitoring'
         }
 
@@ -290,6 +299,36 @@ class Database:
                 for row in rows
             ]
 
+    async def get_unique_hostings(self, user_id: int) -> list[str]:
+        """Возвращает уникальные хостинги пользователя."""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT DISTINCT hosting FROM servers WHERE user_id = ? ORDER BY hosting",
+                (user_id,)
+            )
+            rows = await cursor.fetchall()
+            return [row[0] for row in rows if row[0]]
+
+    async def get_unique_locations(self, user_id: int) -> list[str]:
+        """Возвращает уникальные локации пользователя."""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT DISTINCT location FROM servers WHERE user_id = ? AND location IS NOT NULL ORDER BY location",
+                (user_id,)
+            )
+            rows = await cursor.fetchall()
+            return [row[0] for row in rows if row[0]]
+
+    async def get_unique_prices(self, user_id: int) -> list[tuple[float, str]]:
+        """Возвращает уникальные цены пользователя (price, currency)."""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT DISTINCT price, currency FROM servers WHERE user_id = ? ORDER BY currency, price",
+                (user_id,)
+            )
+            rows = await cursor.fetchall()
+            return [(row[0], row[1]) for row in rows]
+
     def _row_to_server(self, row) -> Server:
         expiry = row['expiry_date']
         if isinstance(expiry, str):
@@ -304,6 +343,7 @@ class Database:
             user_id=row['user_id'],
             name=row['name'],
             hosting=row['hosting'],
+            location=row['location'],
             ip=row['ip'],
             url=row['url'],
             expiry_date=expiry,

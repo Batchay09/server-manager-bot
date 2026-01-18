@@ -60,6 +60,8 @@ def format_server_info(server: Server, detailed: bool = False) -> str:
 
     # Основная информация
     text += f"│ 🏢 {server.hosting}\n"
+    if server.location:
+        text += f"│ 📍 {server.location}\n"
     text += f"│ 📅 До {server.expiry_date.strftime('%d.%m.%Y')} ({status_text})\n"
     text += f"│ {get_progress_bar(days_left)} {status_emoji}\n"
     text += f"│ 💰 {server.price:.2f} {server.currency}/{period_text}\n"
@@ -87,21 +89,50 @@ def format_server_info(server: Server, detailed: bool = False) -> str:
 
 def format_server_list(servers: list[Server]) -> str:
     """Форматирует список серверов."""
+    return format_server_list_sorted(servers, "date")
+
+
+def format_server_list_sorted(servers: list[Server], sort_by: str = "date") -> str:
+    """Форматирует список серверов с сортировкой."""
     if not servers:
         return "📋 <b>Список серверов пуст</b>\n\n💡 Нажмите «➕ Добавить» чтобы добавить первый сервер"
 
-    text = f"📋 <b>Ваши серверы</b> ({len(servers)})\n\n"
+    sort_names = {"date": "по дате", "hosting": "по хостингу", "location": "по локации"}
+    sort_label = sort_names.get(sort_by, "по дате")
+    text = f"📋 <b>Ваши серверы</b> ({len(servers)}) — {sort_label}\n\n"
 
-    # Сортируем по дням до оплаты
-    sorted_servers = sorted(servers, key=lambda s: (s.expiry_date - date.today()).days)
+    # Сортируем по выбранному критерию
+    if sort_by == "hosting":
+        sorted_servers = sorted(servers, key=lambda s: (s.hosting.lower(), (s.expiry_date - date.today()).days))
+    elif sort_by == "location":
+        sorted_servers = sorted(servers, key=lambda s: ((s.location or "zzz").lower(), (s.expiry_date - date.today()).days))
+    else:  # date
+        sorted_servers = sorted(servers, key=lambda s: (s.expiry_date - date.today()).days)
 
+    current_group = None
     for server in sorted_servers:
         days_left = (server.expiry_date - date.today()).days
         status_emoji = get_status_emoji(days_left)
         status_text = get_status_text(days_left)
 
-        text += f"{status_emoji} <b>{server.name}</b>\n"
-        text += f"    └ {server.hosting} • {status_text}\n"
+        # Показываем заголовок группы при сортировке по хостингу или локации
+        if sort_by == "hosting" and current_group != server.hosting:
+            current_group = server.hosting
+            text += f"\n🏢 <b>{server.hosting}</b>\n"
+        elif sort_by == "location":
+            loc = server.location or "Без локации"
+            if current_group != loc:
+                current_group = loc
+                text += f"\n📍 <b>{loc}</b>\n"
+
+        if sort_by in ("hosting", "location"):
+            text += f"  {status_emoji} {server.name} • {status_text}\n"
+        else:
+            text += f"{status_emoji} <b>{server.name}</b>\n"
+            text += f"    └ {server.hosting}"
+            if server.location:
+                text += f" • {server.location}"
+            text += f" • {status_text}\n"
 
     return text
 

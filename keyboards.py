@@ -101,18 +101,19 @@ def get_edit_server_keyboard(server_id: int) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="🏢 Хостинг", callback_data=f"edit_hosting_{server_id}")
     )
     builder.row(
-        InlineKeyboardButton(text="🌐 IP", callback_data=f"edit_ip_{server_id}"),
-        InlineKeyboardButton(text="🔗 URL", callback_data=f"edit_url_{server_id}")
+        InlineKeyboardButton(text="📍 Локация", callback_data=f"edit_location_{server_id}"),
+        InlineKeyboardButton(text="🌐 IP", callback_data=f"edit_ip_{server_id}")
     )
     builder.row(
-        InlineKeyboardButton(text="📅 Дата", callback_data=f"edit_expiry_{server_id}"),
-        InlineKeyboardButton(text="💰 Цена", callback_data=f"edit_price_{server_id}")
+        InlineKeyboardButton(text="🔗 URL", callback_data=f"edit_url_{server_id}"),
+        InlineKeyboardButton(text="📅 Дата", callback_data=f"edit_expiry_{server_id}")
     )
     builder.row(
-        InlineKeyboardButton(text="📋 Заметки", callback_data=f"edit_notes_{server_id}"),
-        InlineKeyboardButton(text="🏷 Теги", callback_data=f"edit_tags_{server_id}")
+        InlineKeyboardButton(text="💰 Цена", callback_data=f"edit_price_{server_id}"),
+        InlineKeyboardButton(text="📋 Заметки", callback_data=f"edit_notes_{server_id}")
     )
     builder.row(
+        InlineKeyboardButton(text="🏷 Теги", callback_data=f"edit_tags_{server_id}"),
         InlineKeyboardButton(text="◀️ Назад", callback_data=f"server_{server_id}")
     )
     return builder.as_markup()
@@ -184,4 +185,122 @@ def get_back_keyboard(callback: str = "main_menu") -> InlineKeyboardMarkup:
         builder.row(
             InlineKeyboardButton(text="◀️ Назад", callback_data=callback)
         )
+    return builder.as_markup()
+
+
+def get_hosting_choice_keyboard(hostings: list[str]) -> InlineKeyboardMarkup:
+    """Клавиатура выбора хостинга из существующих + новый."""
+    builder = InlineKeyboardBuilder()
+    for hosting in hostings[:8]:  # Максимум 8 кнопок
+        builder.row(
+            InlineKeyboardButton(text=f"🏢 {hosting}", callback_data=f"select_hosting_{hosting}")
+        )
+    builder.row(
+        InlineKeyboardButton(text="➕ Новый хостинг", callback_data="new_hosting")
+    )
+    builder.row(
+        InlineKeyboardButton(text="❌ Отмена", callback_data="cancel")
+    )
+    return builder.as_markup()
+
+
+def get_location_choice_keyboard(locations: list[str]) -> InlineKeyboardMarkup:
+    """Клавиатура выбора локации из существующих + новая + пропустить."""
+    builder = InlineKeyboardBuilder()
+    for location in locations[:8]:  # Максимум 8 кнопок
+        builder.row(
+            InlineKeyboardButton(text=f"📍 {location}", callback_data=f"select_location_{location}")
+        )
+    builder.row(
+        InlineKeyboardButton(text="➕ Новая", callback_data="new_location"),
+        InlineKeyboardButton(text="⏭ Пропустить", callback_data="skip_location")
+    )
+    builder.row(
+        InlineKeyboardButton(text="❌ Отмена", callback_data="cancel")
+    )
+    return builder.as_markup()
+
+
+def get_price_choice_keyboard(prices: list[tuple[float, str]]) -> InlineKeyboardMarkup:
+    """Клавиатура выбора цены из существующих + новая."""
+    builder = InlineKeyboardBuilder()
+    for price, currency in prices[:6]:  # Максимум 6 кнопок
+        builder.row(
+            InlineKeyboardButton(
+                text=f"💰 {price:.2f} {currency}",
+                callback_data=f"select_price_{price}_{currency}"
+            )
+        )
+    builder.row(
+        InlineKeyboardButton(text="➕ Новая цена", callback_data="new_price")
+    )
+    builder.row(
+        InlineKeyboardButton(text="❌ Отмена", callback_data="cancel")
+    )
+    return builder.as_markup()
+
+
+def get_sort_keyboard(current_sort: str = "date") -> InlineKeyboardMarkup:
+    """Клавиатура сортировки списка серверов."""
+    builder = InlineKeyboardBuilder()
+
+    date_mark = "✓ " if current_sort == "date" else ""
+    hosting_mark = "✓ " if current_sort == "hosting" else ""
+    location_mark = "✓ " if current_sort == "location" else ""
+
+    builder.row(
+        InlineKeyboardButton(text=f"{date_mark}📅 Дата", callback_data="sort_date"),
+        InlineKeyboardButton(text=f"{hosting_mark}🏢 Хостинг", callback_data="sort_hosting"),
+        InlineKeyboardButton(text=f"{location_mark}📍 Локация", callback_data="sort_location")
+    )
+    return builder.as_markup()
+
+
+def get_server_list_keyboard_with_sort(servers: list[Server], current_sort: str = "date") -> InlineKeyboardMarkup:
+    """Клавиатура списка серверов с сортировкой."""
+    builder = InlineKeyboardBuilder()
+
+    # Сортируем серверы
+    if current_sort == "hosting":
+        sorted_servers = sorted(servers, key=lambda s: (s.hosting.lower(), (s.expiry_date - date.today()).days))
+    elif current_sort == "location":
+        sorted_servers = sorted(servers, key=lambda s: ((s.location or "zzz").lower(), (s.expiry_date - date.today()).days))
+    else:  # date
+        sorted_servers = sorted(servers, key=lambda s: (s.expiry_date - date.today()).days)
+
+    for server in sorted_servers:
+        days_left = (server.expiry_date - date.today()).days
+        status = get_status_emoji(days_left)
+
+        if days_left < 0:
+            days_text = "!"
+        elif days_left == 0:
+            days_text = "сегодня"
+        elif days_left == 1:
+            days_text = "завтра"
+        else:
+            days_text = f"{days_left}д"
+
+        builder.row(
+            InlineKeyboardButton(
+                text=f"{status} {server.name} • {days_text}",
+                callback_data=f"server_{server.id}"
+            )
+        )
+
+    # Кнопки сортировки
+    date_mark = "✓" if current_sort == "date" else ""
+    hosting_mark = "✓" if current_sort == "hosting" else ""
+    location_mark = "✓" if current_sort == "location" else ""
+
+    builder.row(
+        InlineKeyboardButton(text=f"{date_mark}📅", callback_data="sort_date"),
+        InlineKeyboardButton(text=f"{hosting_mark}🏢", callback_data="sort_hosting"),
+        InlineKeyboardButton(text=f"{location_mark}📍", callback_data="sort_location")
+    )
+
+    builder.row(
+        InlineKeyboardButton(text="➕ Добавить", callback_data="add_server"),
+        InlineKeyboardButton(text="🏠 Меню", callback_data="main_menu")
+    )
     return builder.as_markup()
