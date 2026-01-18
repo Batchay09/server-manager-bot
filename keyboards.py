@@ -132,8 +132,15 @@ def get_currency_keyboard() -> InlineKeyboardMarkup:
 def get_period_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(text="📅 Ежемесячно", callback_data="period_monthly"),
-        InlineKeyboardButton(text="📆 Ежегодно", callback_data="period_yearly")
+        InlineKeyboardButton(text="1 мес", callback_data="period_monthly"),
+        InlineKeyboardButton(text="3 мес", callback_data="period_quarterly"),
+    )
+    builder.row(
+        InlineKeyboardButton(text="6 мес", callback_data="period_halfyear"),
+        InlineKeyboardButton(text="1 год", callback_data="period_yearly"),
+    )
+    builder.row(
+        InlineKeyboardButton(text="✏️ Другой срок", callback_data="period_custom")
     )
     return builder.as_markup()
 

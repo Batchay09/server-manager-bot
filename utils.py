@@ -32,6 +32,26 @@ def get_status_text(days_left: int) -> str:
         return f"{days_left} дн."
 
 
+def get_period_text(period: str) -> str:
+    """Возвращает текст периода оплаты."""
+    if period == "monthly":
+        return "мес"
+    elif period == "quarterly":
+        return "3 мес"
+    elif period == "halfyear":
+        return "6 мес"
+    elif period == "yearly":
+        return "год"
+    elif period and period.startswith("custom_"):
+        try:
+            months = int(period.split("_")[1])
+            return f"{months} мес"
+        except (IndexError, ValueError):
+            return "мес"
+    else:
+        return "мес"
+
+
 def get_progress_bar(days_left: int, max_days: int = 30) -> str:
     """Создаёт визуальный прогресс-бар."""
     if days_left < 0:
@@ -51,7 +71,7 @@ def format_server_info(server: Server, detailed: bool = False) -> str:
     status_emoji = get_status_emoji(days_left)
     status_text = get_status_text(days_left)
 
-    period_text = "мес" if server.payment_period == "monthly" else "год"
+    period_text = get_period_text(server.payment_period)
 
     # Заголовок
     text = f"┌{'─' * 28}\n"

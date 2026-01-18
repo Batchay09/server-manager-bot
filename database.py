@@ -215,15 +215,26 @@ class Database:
         if not server:
             return None
 
-        if server.payment_period == "monthly":
-            from dateutil.relativedelta import relativedelta
+        from dateutil.relativedelta import relativedelta
+
+        period = server.payment_period
+        if period == "monthly":
             new_date = server.expiry_date + relativedelta(months=1)
-        elif server.payment_period == "yearly":
-            from dateutil.relativedelta import relativedelta
+        elif period == "quarterly":
+            new_date = server.expiry_date + relativedelta(months=3)
+        elif period == "halfyear":
+            new_date = server.expiry_date + relativedelta(months=6)
+        elif period == "yearly":
             new_date = server.expiry_date + relativedelta(years=1)
+        elif period.startswith("custom_"):
+            # Формат: custom_N где N - количество месяцев
+            try:
+                months = int(period.split("_")[1])
+                new_date = server.expiry_date + relativedelta(months=months)
+            except (IndexError, ValueError):
+                new_date = server.expiry_date + relativedelta(months=1)
         else:
-            from datetime import timedelta
-            new_date = server.expiry_date + timedelta(days=30)
+            new_date = server.expiry_date + relativedelta(months=1)
 
         await self.update_server(server_id, user_id, expiry_date=new_date)
         return new_date

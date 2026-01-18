@@ -15,7 +15,7 @@ from keyboards import (
 )
 from utils import (
     format_server_info, format_server_list_sorted, format_expiring_servers,
-    parse_date, parse_price
+    parse_date, parse_price, get_period_text
 )
 
 router = Router()
@@ -32,6 +32,7 @@ class AddServerStates(StatesGroup):
     price_new = State()       # Ввод новой цены
     currency = State()
     period = State()
+    period_custom = State()   # Ввод своего периода в месяцах
     ip = State()
     url = State()
     notes = State()
@@ -46,6 +47,7 @@ class PaymentStates(StatesGroup):
     waiting_price = State()
     waiting_currency = State()
     waiting_date = State()
+    waiting_period_custom = State()
 
 
 @router.message(Command("start"))
@@ -341,6 +343,18 @@ async def process_currency(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(AddServerStates.period, F.data.startswith("period_"))
 async def process_period(callback: CallbackQuery, state: FSMContext):
     period = callback.data.split("_")[1]
+
+    if period == "custom":
+        await state.set_state(AddServerStates.period_custom)
+        await callback.message.edit_text(
+            "📆 Введите <b>период оплаты</b> в месяцах:\n"
+            "<i>Например: 2, 4, 9</i>",
+            reply_markup=get_cancel_keyboard(),
+            parse_mode="HTML"
+        )
+        await callback.answer()
+        return
+
     await state.update_data(period=period)
     await state.set_state(AddServerStates.ip)
     await callback.message.edit_text(
@@ -350,6 +364,30 @@ async def process_period(callback: CallbackQuery, state: FSMContext):
         parse_mode="HTML"
     )
     await callback.answer()
+
+
+@router.message(AddServerStates.period_custom)
+async def process_period_custom(message: Message, state: FSMContext):
+    try:
+        months = int(message.text.strip())
+        if months < 1 or months > 120:
+            raise ValueError()
+    except ValueError:
+        await message.answer(
+            "❌ Введите число от 1 до 120",
+            reply_markup=get_cancel_keyboard(),
+            parse_mode="HTML"
+        )
+        return
+
+    await state.update_data(period=f"custom_{months}")
+    await state.set_state(AddServerStates.ip)
+    await message.answer(
+        "🌐 Введите <b>IP адрес</b> сервера:\n"
+        "<i>Или нажмите «Пропустить»</i>",
+        reply_markup=get_skip_keyboard("ip"),
+        parse_mode="HTML"
+    )
 
 
 @router.message(AddServerStates.ip)
@@ -561,7 +599,7 @@ async def cb_mark_paid(callback: CallbackQuery):
         await callback.answer("❌ Сервер не найден", show_alert=True)
         return
 
-    period_text = "месяц" if server.payment_period == "monthly" else "год"
+    period_text = get_period_text(server.payment_period)
     text = (
         f"💳 <b>Подтверждение оплаты</b>\n\n"
         f"🖥 {server.name}\n"
@@ -709,6 +747,18 @@ async def process_pay_period(callback: CallbackQuery, state: FSMContext):
 
     period = callback.data.split("_")[1]
 
+    # Если выбран кастомный период — запрашиваем количество месяцев
+    if period == "custom":
+        await state.set_state(PaymentStates.waiting_period_custom)
+        await callback.message.edit_text(
+            "📆 Введите <b>период оплаты</b> в месяцах:\n"
+            "<i>Например: 2, 4, 9</i>",
+            reply_markup=get_cancel_keyboard(),
+            parse_mode="HTML"
+        )
+        await callback.answer()
+        return
+
     # Обновляем период и отмечаем оплату
     await db.update_server(server_id, callback.from_user.id, payment_period=period)
     new_date = await db.mark_paid(server_id, callback.from_user.id)
@@ -716,9 +766,9 @@ async def process_pay_period(callback: CallbackQuery, state: FSMContext):
     await state.clear()
 
     server = await db.get_server(server_id, callback.from_user.id)
-    period_text = "ежемесячно" if period == "monthly" else "ежегодно"
+    period_text_full = get_period_text(period)
     text = f"✅ <b>Оплата отмечена!</b>\n\n"
-    text += f"📆 Новый период: <b>{period_text}</b>\n"
+    text += f"📆 Новый период: <b>{period_text_full}</b>\n"
     text += f"📅 Следующая оплата: <b>{new_date.strftime('%d.%m.%Y')}</b>\n\n"
     text += format_server_info(server, detailed=True)
     await callback.message.edit_text(
@@ -727,6 +777,43 @@ async def process_pay_period(callback: CallbackQuery, state: FSMContext):
         parse_mode="HTML"
     )
     await callback.answer("✅ Оплата отмечена!")
+
+
+@router.message(PaymentStates.waiting_period_custom)
+async def process_pay_period_custom(message: Message, state: FSMContext):
+    """Обработка кастомного периода при оплате."""
+    try:
+        months = int(message.text.strip())
+        if months < 1 or months > 120:
+            raise ValueError()
+    except ValueError:
+        await message.answer(
+            "❌ Введите число от 1 до 120",
+            reply_markup=get_cancel_keyboard(),
+            parse_mode="HTML"
+        )
+        return
+
+    data = await state.get_data()
+    server_id = data['pay_server_id']
+    period = f"custom_{months}"
+
+    # Обновляем период и отмечаем оплату
+    await db.update_server(server_id, message.from_user.id, payment_period=period)
+    new_date = await db.mark_paid(server_id, message.from_user.id)
+
+    await state.clear()
+
+    server = await db.get_server(server_id, message.from_user.id)
+    text = f"✅ <b>Оплата отмечена!</b>\n\n"
+    text += f"📆 Новый период: <b>{months} мес</b>\n"
+    text += f"📅 Следующая оплата: <b>{new_date.strftime('%d.%m.%Y')}</b>\n\n"
+    text += format_server_info(server, detailed=True)
+    await message.answer(
+        text,
+        reply_markup=get_server_detail_keyboard(server),
+        parse_mode="HTML"
+    )
 
 
 @router.callback_query(F.data.startswith("pay_edit_date_"))
