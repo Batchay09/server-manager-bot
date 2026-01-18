@@ -47,11 +47,16 @@ Copy `.env.example` to `.env` and set `BOT_TOKEN` from @BotFather.
 
 ## Быстрые команды
 
-**"деплой"** или **"релиз"** — выполнить полный цикл:
+**"деплой"** — только залить на сервер для проверки:
+```bash
+sshpass -p '4G*p42Oz0wBJ' ssh root@155.212.144.230 "cd /opt/server-manager-bot && git pull && systemctl restart server-bot"
+```
+
+**"релиз"** — полный цикл выпуска версии:
 1. Обновить VERSION (инкремент)
 2. Обновить CHANGELOG.md
 3. Git add + commit + push
-4. Deploy на VPS (ssh + git pull + restart)
+4. Deploy на VPS
 
 ---
 
