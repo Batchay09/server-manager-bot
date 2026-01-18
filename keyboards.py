@@ -314,30 +314,33 @@ def get_server_list_keyboard_with_sort(servers: list[Server], current_sort: str 
     else:  # date
         sorted_servers = sorted(servers, key=lambda s: (s.expiry_date - date.today()).days)
 
+    # Кнопки серверов - по 2 в ряд для компактности
+    buttons = []
     for server in sorted_servers:
         days_left = (server.expiry_date - date.today()).days
         status = get_status_emoji(days_left)
 
-        if days_left < 0:
-            days_text = f"⚠️{abs(days_left)}д"
-        elif days_left == 0:
-            days_text = "сегодня!"
-        elif days_left == 1:
-            days_text = "завтра"
-        else:
-            days_text = f"{days_left}д"
+        # Короткое имя для кнопки (макс ~15 символов)
+        name = server.name[:12] + "…" if len(server.name) > 12 else server.name
 
-        builder.row(
+        buttons.append(
             InlineKeyboardButton(
-                text=f"{status} {server.name} → {days_text}",
+                text=f"{status} {name}",
                 callback_data=f"server_{server.id}"
             )
         )
 
-    # Кнопки сортировки - подчёркиваем текущую
-    date_text = "• 📅" if current_sort == "date" else "📅"
-    hosting_text = "• 🏢" if current_sort == "hosting" else "🏢"
-    location_text = "• 📍" if current_sort == "location" else "📍"
+    # Располагаем по 2 кнопки в ряд
+    for i in range(0, len(buttons), 2):
+        if i + 1 < len(buttons):
+            builder.row(buttons[i], buttons[i + 1])
+        else:
+            builder.row(buttons[i])
+
+    # Кнопки сортировки
+    date_text = "✓ Дата" if current_sort == "date" else "Дата"
+    hosting_text = "✓ Хостинг" if current_sort == "hosting" else "Хостинг"
+    location_text = "✓ Локация" if current_sort == "location" else "Локация"
 
     builder.row(
         InlineKeyboardButton(text=date_text, callback_data="sort_date"),

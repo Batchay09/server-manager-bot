@@ -77,29 +77,35 @@ def format_server_info(server: Server, detailed: bool = False) -> str:
     text += "━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
     # Статус оплаты
-    text += f"{status_emoji} <b>{status_text}</b>\n"
-    text += f"{get_progress_bar(days_left)}\n"
-    text += f"📅 {server.expiry_date.strftime('%d.%m.%Y')}\n\n"
+    text += f"📊 <b>Статус оплаты</b>\n"
+    text += f"{status_emoji} {status_text}\n"
+    text += f"{get_progress_bar(days_left)}\n\n"
 
     # Основная информация
-    text += f"🏢 {server.hosting}"
+    text += f"📋 <b>Информация</b>\n"
+    text += f"├ 🏢 {server.hosting}\n"
     if server.location:
-        text += f" • {server.location}"
-    text += f"\n💰 {server.price:.0f} {server.currency}/{period_text}\n"
+        text += f"├ 📍 {server.location}\n"
+    text += f"├ 💰 {server.price:.0f} {server.currency}/{period_text}\n"
+    text += f"└ 📅 {server.expiry_date.strftime('%d.%m.%Y')}\n"
 
     if detailed:
         extras = []
         if server.ip:
-            extras.append(f"🌐 <code>{server.ip}</code>")
+            extras.append(f"├ 🌐 <code>{server.ip}</code>")
         if server.url:
-            extras.append(f"🔗 {server.url}")
+            extras.append(f"├ 🔗 {server.url}")
         if server.notes:
-            extras.append(f"📝 {server.notes}")
+            extras.append(f"├ 📝 {server.notes}")
         if server.tags:
-            extras.append(f"🏷 {server.tags}")
+            extras.append(f"└ 🏷 {server.tags}")
 
         if extras:
-            text += "\n" + "\n".join(extras)
+            text += f"\n🔧 <b>Дополнительно</b>\n"
+            # Исправляем последний элемент на └
+            if len(extras) > 0:
+                extras[-1] = extras[-1].replace("├", "└", 1)
+            text += "\n".join(extras)
 
     return text
 
@@ -122,13 +128,12 @@ def format_server_list_sorted(servers: list[Server], sort_by: str = "date") -> s
     total = len(servers)
     urgent = sum(1 for s in servers if (s.expiry_date - date.today()).days <= 7)
 
-    sort_icons = {"date": "📅", "hosting": "🏢", "location": "📍"}
-    sort_icon = sort_icons.get(sort_by, "📅")
+    sort_names = {"date": "по дате", "hosting": "по хостингу", "location": "по локации"}
+    sort_name = sort_names.get(sort_by, "по дате")
 
-    text = f"📋 <b>Серверы</b> ({total})"
+    text = f"📋 <b>Мои серверы</b> ({total})\n"
     if urgent > 0:
-        text += f" • ⚠️ {urgent}"
-    text += f"\n{sort_icon} Сортировка\n"
+        text += f"⚠️ Требуют внимания: {urgent}\n"
     text += "━━━━━━━━━━━━━━━━━━━━━━\n"
 
     # Сортируем по выбранному критерию
@@ -143,18 +148,36 @@ def format_server_list_sorted(servers: list[Server], sort_by: str = "date") -> s
     for server in sorted_servers:
         days_left = (server.expiry_date - date.today()).days
         status_emoji = get_status_emoji(days_left)
+        status_text = get_status_text(days_left)
+        period_text = get_period_text(server.payment_period)
 
-        # Показываем заголовок группы
+        # Показываем заголовок группы при сортировке
         if sort_by == "hosting" and current_group != server.hosting:
             current_group = server.hosting
-            text += f"\n<b>{server.hosting}</b>\n"
+            text += f"\n🏢 <b>{server.hosting}</b>\n"
         elif sort_by == "location":
-            loc = server.location or "—"
+            loc = server.location or "Без локации"
             if current_group != loc:
                 current_group = loc
-                text += f"\n<b>{loc}</b>\n"
+                text += f"\n📍 <b>{loc}</b>\n"
 
-    text += "\n👆 Выберите сервер"
+        # Информация о сервере
+        text += f"\n{status_emoji} <b>{server.name}</b>\n"
+
+        # Детали в зависимости от сортировки
+        if sort_by == "date":
+            location_str = f" • {server.location}" if server.location else ""
+            text += f"   {server.hosting}{location_str}\n"
+        elif sort_by == "hosting":
+            location_str = f" • {server.location}" if server.location else ""
+            text += f"   {status_text}{location_str}\n"
+        else:  # location
+            text += f"   {server.hosting} • {status_text}\n"
+
+        text += f"   💰 {server.price:.0f} {server.currency}/{period_text} • 📅 {server.expiry_date.strftime('%d.%m')}\n"
+
+    text += f"\n━━━━━━━━━━━━━━━━━━━━━━\n"
+    text += f"🔽 Сортировка: {sort_name}"
 
     return text
 
@@ -162,18 +185,39 @@ def format_server_list_sorted(servers: list[Server], sort_by: str = "date") -> s
 def format_expiring_servers(servers: list[Server]) -> str:
     """Форматирует список истекающих серверов."""
     if not servers:
-        return "✅ <b>Всё оплачено!</b>\n\n🎉 Нет серверов с истекающей оплатой в ближайшие 30 дней"
+        return (
+            "✅ <b>Всё оплачено!</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "🎉 Нет серверов с истекающей\n"
+            "оплатой в ближайшие 30 дней"
+        )
 
-    text = "⚡ <b>Требуют внимания</b>\n\n"
+    text = f"⚡ <b>Требуют внимания</b> ({len(servers)})\n"
+    text += "━━━━━━━━━━━━━━━━━━━━━━\n"
+
+    total_by_currency: dict[str, float] = {}
 
     for server in servers:
         days_left = (server.expiry_date - date.today()).days
         status_emoji = get_status_emoji(days_left)
         status_text = get_status_text(days_left)
+        period_text = get_period_text(server.payment_period)
 
-        text += f"{status_emoji} <b>{server.name}</b>\n"
-        text += f"    📅 {server.expiry_date.strftime('%d.%m.%Y')} — {status_text}\n"
-        text += f"    💰 {server.price:.2f} {server.currency}\n\n"
+        text += f"\n{status_emoji} <b>{server.name}</b>\n"
+        text += f"   {server.hosting}"
+        if server.location:
+            text += f" • {server.location}"
+        text += f"\n   📅 {server.expiry_date.strftime('%d.%m.%Y')} — {status_text}\n"
+        text += f"   💰 {server.price:.0f} {server.currency}/{period_text}\n"
+
+        total_by_currency[server.currency] = total_by_currency.get(server.currency, 0) + server.price
+
+    # Итого к оплате
+    if len(servers) > 1:
+        text += "\n━━━━━━━━━━━━━━━━━━━━━━\n"
+        text += "💵 <b>Итого к оплате:</b>\n"
+        for currency, amount in sorted(total_by_currency.items()):
+            text += f"   {amount:.0f} {currency}\n"
 
     return text
 
