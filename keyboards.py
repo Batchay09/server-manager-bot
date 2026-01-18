@@ -21,14 +21,14 @@ def get_status_emoji(days_left: int) -> str:
 def get_main_menu() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
+        InlineKeyboardButton(text="📋 Мои серверы", callback_data="list_servers")
+    )
+    builder.row(
         InlineKeyboardButton(text="➕ Добавить", callback_data="add_server"),
-        InlineKeyboardButton(text="📋 Серверы", callback_data="list_servers")
+        InlineKeyboardButton(text="⚡ Срочные", callback_data="expiring_servers")
     )
     builder.row(
-        InlineKeyboardButton(text="⚡ Срочные", callback_data="expiring_servers"),
-        InlineKeyboardButton(text="📊 Статистика", callback_data="stats")
-    )
-    builder.row(
+        InlineKeyboardButton(text="📊 Статистика", callback_data="stats"),
         InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings")
     )
     return builder.as_markup()
@@ -45,17 +45,18 @@ def get_server_list_keyboard(servers: list[Server]) -> InlineKeyboardMarkup:
         status = get_status_emoji(days_left)
 
         if days_left < 0:
-            days_text = "!"
+            days_text = f"⚠️{abs(days_left)}д"
         elif days_left == 0:
-            days_text = "сегодня"
+            days_text = "сегодня!"
         elif days_left == 1:
             days_text = "завтра"
         else:
             days_text = f"{days_left}д"
 
+        # Компактная кнопка: статус + имя + дни
         builder.row(
             InlineKeyboardButton(
-                text=f"{status} {server.name} • {days_text}",
+                text=f"{status} {server.name} → {days_text}",
                 callback_data=f"server_{server.id}"
             )
         )
@@ -70,17 +71,18 @@ def get_server_list_keyboard(servers: list[Server]) -> InlineKeyboardMarkup:
 def get_server_detail_keyboard(server: Server) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(text="✅ Оплачено", callback_data=f"paid_{server.id}"),
-        InlineKeyboardButton(text="✏️ Изменить", callback_data=f"edit_{server.id}")
+        InlineKeyboardButton(text="💳 Оплатить", callback_data=f"paid_{server.id}")
     )
-
-    monitoring_text = "📡 Выкл. мониторинг" if server.is_monitoring else "📡 Вкл. мониторинг"
     builder.row(
-        InlineKeyboardButton(text=monitoring_text, callback_data=f"toggle_monitoring_{server.id}"),
+        InlineKeyboardButton(text="✏️ Изменить", callback_data=f"edit_{server.id}"),
         InlineKeyboardButton(text="🗑 Удалить", callback_data=f"delete_{server.id}")
     )
+
+    monitoring_icon = "🟢" if server.is_monitoring else "⚫"
+    monitoring_text = f"{monitoring_icon} Мониторинг"
     builder.row(
-        InlineKeyboardButton(text="◀️ К списку", callback_data="list_servers")
+        InlineKeyboardButton(text=monitoring_text, callback_data=f"toggle_monitoring_{server.id}"),
+        InlineKeyboardButton(text="◀️ Назад", callback_data="list_servers")
     )
     return builder.as_markup()
 
@@ -317,9 +319,9 @@ def get_server_list_keyboard_with_sort(servers: list[Server], current_sort: str 
         status = get_status_emoji(days_left)
 
         if days_left < 0:
-            days_text = "!"
+            days_text = f"⚠️{abs(days_left)}д"
         elif days_left == 0:
-            days_text = "сегодня"
+            days_text = "сегодня!"
         elif days_left == 1:
             days_text = "завтра"
         else:
@@ -327,20 +329,20 @@ def get_server_list_keyboard_with_sort(servers: list[Server], current_sort: str 
 
         builder.row(
             InlineKeyboardButton(
-                text=f"{status} {server.name} • {days_text}",
+                text=f"{status} {server.name} → {days_text}",
                 callback_data=f"server_{server.id}"
             )
         )
 
-    # Кнопки сортировки
-    date_mark = "✓" if current_sort == "date" else ""
-    hosting_mark = "✓" if current_sort == "hosting" else ""
-    location_mark = "✓" if current_sort == "location" else ""
+    # Кнопки сортировки - подчёркиваем текущую
+    date_text = "• 📅" if current_sort == "date" else "📅"
+    hosting_text = "• 🏢" if current_sort == "hosting" else "🏢"
+    location_text = "• 📍" if current_sort == "location" else "📍"
 
     builder.row(
-        InlineKeyboardButton(text=f"{date_mark}📅", callback_data="sort_date"),
-        InlineKeyboardButton(text=f"{hosting_mark}🏢", callback_data="sort_hosting"),
-        InlineKeyboardButton(text=f"{location_mark}📍", callback_data="sort_location")
+        InlineKeyboardButton(text=date_text, callback_data="sort_date"),
+        InlineKeyboardButton(text=hosting_text, callback_data="sort_hosting"),
+        InlineKeyboardButton(text=location_text, callback_data="sort_location")
     )
 
     builder.row(

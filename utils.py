@@ -66,43 +66,40 @@ def get_progress_bar(days_left: int, max_days: int = 30) -> str:
 
 
 def format_server_info(server: Server, detailed: bool = False) -> str:
-    """Форматирует карточку сервера в премиум-стиле."""
+    """Форматирует карточку сервера."""
     days_left = (server.expiry_date - date.today()).days
     status_emoji = get_status_emoji(days_left)
     status_text = get_status_text(days_left)
-
     period_text = get_period_text(server.payment_period)
 
     # Заголовок
-    text = f"┌{'─' * 28}\n"
-    text += f"│ 🖥 <b>{server.name}</b>\n"
-    text += f"├{'─' * 28}\n"
+    text = f"🖥 <b>{server.name}</b>\n"
+    text += "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+
+    # Статус оплаты
+    text += f"{status_emoji} <b>{status_text}</b>\n"
+    text += f"{get_progress_bar(days_left)}\n"
+    text += f"📅 {server.expiry_date.strftime('%d.%m.%Y')}\n\n"
 
     # Основная информация
-    text += f"│ 🏢 {server.hosting}\n"
+    text += f"🏢 {server.hosting}"
     if server.location:
-        text += f"│ 📍 {server.location}\n"
-    text += f"│ 📅 До {server.expiry_date.strftime('%d.%m.%Y')} ({status_text})\n"
-    text += f"│ {get_progress_bar(days_left)} {status_emoji}\n"
-    text += f"│ 💰 {server.price:.2f} {server.currency}/{period_text}\n"
+        text += f" • {server.location}"
+    text += f"\n💰 {server.price:.0f} {server.currency}/{period_text}\n"
 
     if detailed:
-        if server.ip or server.url or server.notes or server.tags:
-            text += f"├{'─' * 28}\n"
-
+        extras = []
         if server.ip:
-            text += f"│ 🌐 <code>{server.ip}</code>\n"
+            extras.append(f"🌐 <code>{server.ip}</code>")
         if server.url:
-            text += f"│ 🔗 {server.url}\n"
+            extras.append(f"🔗 {server.url}")
         if server.notes:
-            text += f"│ 📝 {server.notes}\n"
+            extras.append(f"📝 {server.notes}")
         if server.tags:
-            text += f"│ 🏷 {server.tags}\n"
+            extras.append(f"🏷 {server.tags}")
 
-        monitoring_status = "🟢 Вкл" if server.is_monitoring else "⚫ Выкл"
-        text += f"│ 📡 Мониторинг: {monitoring_status}\n"
-
-    text += f"└{'─' * 28}"
+        if extras:
+            text += "\n" + "\n".join(extras)
 
     return text
 
@@ -115,11 +112,24 @@ def format_server_list(servers: list[Server]) -> str:
 def format_server_list_sorted(servers: list[Server], sort_by: str = "date") -> str:
     """Форматирует список серверов с сортировкой."""
     if not servers:
-        return "📋 <b>Список серверов пуст</b>\n\n💡 Нажмите «➕ Добавить» чтобы добавить первый сервер"
+        return (
+            "📋 <b>Нет серверов</b>\n\n"
+            "Нажмите <b>➕ Добавить</b> чтобы\n"
+            "добавить первый сервер"
+        )
 
-    sort_names = {"date": "по дате", "hosting": "по хостингу", "location": "по локации"}
-    sort_label = sort_names.get(sort_by, "по дате")
-    text = f"📋 <b>Ваши серверы</b> ({len(servers)}) — {sort_label}\n\n"
+    # Считаем статистику
+    total = len(servers)
+    urgent = sum(1 for s in servers if (s.expiry_date - date.today()).days <= 7)
+
+    sort_icons = {"date": "📅", "hosting": "🏢", "location": "📍"}
+    sort_icon = sort_icons.get(sort_by, "📅")
+
+    text = f"📋 <b>Серверы</b> ({total})"
+    if urgent > 0:
+        text += f" • ⚠️ {urgent}"
+    text += f"\n{sort_icon} Сортировка\n"
+    text += "━━━━━━━━━━━━━━━━━━━━━━\n"
 
     # Сортируем по выбранному критерию
     if sort_by == "hosting":
@@ -133,26 +143,18 @@ def format_server_list_sorted(servers: list[Server], sort_by: str = "date") -> s
     for server in sorted_servers:
         days_left = (server.expiry_date - date.today()).days
         status_emoji = get_status_emoji(days_left)
-        status_text = get_status_text(days_left)
 
-        # Показываем заголовок группы при сортировке по хостингу или локации
+        # Показываем заголовок группы
         if sort_by == "hosting" and current_group != server.hosting:
             current_group = server.hosting
-            text += f"\n🏢 <b>{server.hosting}</b>\n"
+            text += f"\n<b>{server.hosting}</b>\n"
         elif sort_by == "location":
-            loc = server.location or "Без локации"
+            loc = server.location or "—"
             if current_group != loc:
                 current_group = loc
-                text += f"\n📍 <b>{loc}</b>\n"
+                text += f"\n<b>{loc}</b>\n"
 
-        if sort_by in ("hosting", "location"):
-            text += f"  {status_emoji} {server.name} • {status_text}\n"
-        else:
-            text += f"{status_emoji} <b>{server.name}</b>\n"
-            text += f"    └ {server.hosting}"
-            if server.location:
-                text += f" • {server.location}"
-            text += f" • {status_text}\n"
+    text += "\n👆 Выберите сервер"
 
     return text
 

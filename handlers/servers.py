@@ -52,16 +52,23 @@ class PaymentStates(StatesGroup):
 
 @router.message(Command("start"))
 async def cmd_start(message: Message):
+    # Получаем статистику для приветствия
+    servers = await db.get_all_servers(message.from_user.id)
+    servers_count = len(servers)
+
+    if servers_count > 0:
+        from datetime import date
+        expiring = sum(1 for s in servers if (s.expiry_date - date.today()).days <= 7)
+        expiring_text = f"\n⚠️ Требуют внимания: <b>{expiring}</b>" if expiring > 0 else ""
+        stats_text = f"📊 Серверов: <b>{servers_count}</b>{expiring_text}"
+    else:
+        stats_text = "👋 Добавьте первый сервер"
+
     text = (
-        "🖥 <b>Server Manager</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        "Управляйте серверами легко:\n\n"
-        "📋 Отслеживайте сроки оплаты\n"
-        "🔔 Получайте напоминания\n"
-        "📡 Мониторьте доступность\n"
-        "📊 Анализируйте расходы\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "Выберите действие:"
+        f"🖥 <b>Server Manager</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{stats_text}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━"
     )
     await message.answer(text, reply_markup=get_main_menu(), parse_mode="HTML")
 
@@ -93,10 +100,24 @@ async def cmd_help(message: Message):
 @router.callback_query(F.data == "main_menu")
 async def cb_main_menu(callback: CallbackQuery, state: FSMContext):
     await state.clear()
+
+    # Получаем статистику
+    servers = await db.get_all_servers(callback.from_user.id)
+    servers_count = len(servers)
+
+    if servers_count > 0:
+        from datetime import date
+        expiring = sum(1 for s in servers if (s.expiry_date - date.today()).days <= 7)
+        expiring_text = f"\n⚠️ Требуют внимания: <b>{expiring}</b>" if expiring > 0 else ""
+        stats_text = f"📊 Серверов: <b>{servers_count}</b>{expiring_text}"
+    else:
+        stats_text = "👋 Добавьте первый сервер"
+
     text = (
-        "🖥 <b>Server Manager</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        "Выберите действие:"
+        f"🖥 <b>Server Manager</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{stats_text}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━"
     )
     await callback.message.edit_text(text, reply_markup=get_main_menu(), parse_mode="HTML")
     await callback.answer()
