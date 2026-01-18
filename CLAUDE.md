@@ -45,6 +45,43 @@ Two tables: `servers` (id, user_id, name, hosting, location, ip, url, expiry_dat
 
 Copy `.env.example` to `.env` and set `BOT_TOKEN` from @BotFather.
 
+## Git Workflow (ОБЯЗАТЕЛЬНО)
+
+При коммите изменений **ВСЕГДА** выполняй:
+
+1. **Обнови VERSION** — инкремент версии по semver:
+   - MAJOR (x.0.0) — несовместимые изменения
+   - MINOR (0.x.0) — новые фичи
+   - PATCH (0.0.x) — багфиксы
+
+2. **Обнови CHANGELOG.md** — добавь новый раздел:
+   ```markdown
+   ## [X.X.X] - YYYY-MM-DD
+
+   ### Добавлено
+   - ...
+
+   ### Изменено
+   - ...
+
+   ### Исправлено
+   - ...
+   ```
+
+3. **Коммит** с осмысленным сообщением:
+   - `feat:` — новая функциональность
+   - `fix:` — исправление бага
+   - `chore:` — рутина (версии, зависимости)
+   - `docs:` — документация
+   - `refactor:` — рефакторинг
+
+4. **Push** на GitHub
+
+5. **Deploy** на VPS:
+   ```bash
+   sshpass -p '4G*p42Oz0wBJ' ssh root@155.212.144.230 "cd /opt/server-manager-bot && git pull && systemctl restart server-bot"
+   ```
+
 ## UI Design
 
 Premium business style with visual elements:
