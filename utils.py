@@ -1,5 +1,12 @@
 from datetime import date
 from database import Server
+from config import EXCHANGE_RATES
+
+
+def convert_to_rub(amount: float, currency: str) -> float:
+    """Конвертирует сумму в рубли."""
+    rate = EXCHANGE_RATES.get(currency, 1.0)
+    return amount * rate
 
 
 def get_status_emoji(days_left: int) -> str:
@@ -207,11 +214,14 @@ def format_expiring_servers(servers: list[Server]) -> str:
         total_by_currency[server.currency] = total_by_currency.get(server.currency, 0) + server.price
 
     # Итого к оплате
-    if len(servers) > 1:
-        text += "\n━━━━━━━━━━━━━━━━━━━━━━\n"
-        text += "💵 <b>Итого к оплате:</b>\n"
-        for currency, amount in sorted(total_by_currency.items()):
-            text += f"   {amount:.0f} {currency}\n"
+    text += "\n━━━━━━━━━━━━━━━━━━━━━━\n"
+    text += "💵 <b>Итого к оплате:</b>\n"
+    total_rub = 0.0
+    for currency, amount in sorted(total_by_currency.items()):
+        text += f"   {amount:.0f} {currency}\n"
+        total_rub += convert_to_rub(amount, currency)
+    if len(total_by_currency) > 1 or "RUB" not in total_by_currency:
+        text += f"   ≈ <b>{total_rub:.0f} ₽</b>\n"
 
     return text
 
@@ -224,6 +234,8 @@ def format_stats(servers: list[Server]) -> str:
     monthly_by_currency: dict[str, float] = {}
     yearly_by_currency: dict[str, float] = {}
     by_hosting: dict[str, int] = {}
+    total_monthly_rub = 0.0
+    total_yearly_rub = 0.0
 
     for server in servers:
         currency = server.currency
@@ -231,12 +243,33 @@ def format_stats(servers: list[Server]) -> str:
         if server.payment_period == "monthly":
             monthly = server.price
             yearly = server.price * 12
-        else:
+        elif server.payment_period == "quarterly":
+            monthly = server.price / 3
+            yearly = server.price * 4
+        elif server.payment_period == "halfyear":
+            monthly = server.price / 6
+            yearly = server.price * 2
+        elif server.payment_period == "yearly":
             monthly = server.price / 12
             yearly = server.price
+        elif server.payment_period and server.payment_period.startswith("custom_"):
+            try:
+                months = int(server.payment_period.split("_")[1])
+                monthly = server.price / months
+                yearly = monthly * 12
+            except (IndexError, ValueError):
+                monthly = server.price
+                yearly = server.price * 12
+        else:
+            monthly = server.price
+            yearly = server.price * 12
 
         monthly_by_currency[currency] = monthly_by_currency.get(currency, 0) + monthly
         yearly_by_currency[currency] = yearly_by_currency.get(currency, 0) + yearly
+
+        # Конвертируем в рубли для итого
+        total_monthly_rub += convert_to_rub(monthly, currency)
+        total_yearly_rub += convert_to_rub(yearly, currency)
 
         by_hosting[server.hosting] = by_hosting.get(server.hosting, 0) + 1
 
@@ -247,12 +280,16 @@ def format_stats(servers: list[Server]) -> str:
 
     text += "│ 💳 <b>Ежемесячно:</b>\n"
     for currency, amount in sorted(monthly_by_currency.items()):
-        text += f"│    {amount:.2f} {currency}\n"
+        text += f"│    {amount:.0f} {currency}\n"
+    if len(monthly_by_currency) > 1 or "RUB" not in monthly_by_currency:
+        text += f"│    ≈ <b>{total_monthly_rub:.0f} ₽</b>\n"
 
     text += f"├{'─' * 24}\n"
     text += "│ 📆 <b>В год:</b>\n"
     for currency, amount in sorted(yearly_by_currency.items()):
-        text += f"│    {amount:.2f} {currency}\n"
+        text += f"│    {amount:.0f} {currency}\n"
+    if len(yearly_by_currency) > 1 or "RUB" not in yearly_by_currency:
+        text += f"│    ≈ <b>{total_yearly_rub:.0f} ₽</b>\n"
 
     text += f"├{'─' * 24}\n"
     text += "│ 🏢 <b>По хостингам:</b>\n"
@@ -292,11 +329,14 @@ def format_reminder(servers: list[Server]) -> str:
 
         total_by_currency[server.currency] = total_by_currency.get(server.currency, 0) + server.price
 
-    if len(servers) > 1:
-        text += "─" * 24 + "\n"
-        text += "💵 <b>Итого к оплате:</b>\n"
-        for currency, amount in sorted(total_by_currency.items()):
-            text += f"    {amount:.2f} {currency}\n"
+    text += "─" * 24 + "\n"
+    text += "💵 <b>Итого к оплате:</b>\n"
+    total_rub = 0.0
+    for currency, amount in sorted(total_by_currency.items()):
+        text += f"    {amount:.0f} {currency}\n"
+        total_rub += convert_to_rub(amount, currency)
+    if len(total_by_currency) > 1 or "RUB" not in total_by_currency:
+        text += f"    ≈ <b>{total_rub:.0f} ₽</b>\n"
 
     return text
 
