@@ -87,7 +87,7 @@ def format_server_info(server: Server, detailed: bool = False) -> str:
     if server.location:
         text += f"├ 📍 {server.location}\n"
     text += f"├ 💰 {server.price:.0f} {server.currency}/{period_text}\n"
-    text += f"└ 📅 {server.expiry_date.strftime('%d.%m.%Y')}\n"
+    text += f"└ {server.expiry_date.strftime('%d.%m.%Y')} • {status_text}\n"
 
     if detailed:
         extras = []
@@ -170,11 +170,11 @@ def format_server_list_sorted(servers: list[Server], sort_by: str = "date") -> s
             text += f"   {server.hosting}{location_str}\n"
         elif sort_by == "hosting":
             location_str = f" • {server.location}" if server.location else ""
-            text += f"   {status_text}{location_str}\n"
+            text += f"   {location_str.lstrip(' • ') if location_str else ''}\n" if server.location else ""
         else:  # location
-            text += f"   {server.hosting} • {status_text}\n"
+            text += f"   {server.hosting}\n"
 
-        text += f"   💰 {server.price:.0f} {server.currency}/{period_text} • 📅 {server.expiry_date.strftime('%d.%m')}\n"
+        text += f"   💰 {server.price:.0f} {server.currency}/{period_text} • {server.expiry_date.strftime('%d.%m')} ({status_text})\n"
 
     text += f"\n━━━━━━━━━━━━━━━━━━━━━━\n"
     text += f"🔽 Сортировка: {sort_name}"
@@ -207,7 +207,7 @@ def format_expiring_servers(servers: list[Server]) -> str:
         text += f"   {server.hosting}"
         if server.location:
             text += f" • {server.location}"
-        text += f"\n   📅 {server.expiry_date.strftime('%d.%m.%Y')} — {status_text}\n"
+        text += f"\n   {server.expiry_date.strftime('%d.%m.%Y')} — {status_text}\n"
         text += f"   💰 {server.price:.0f} {server.currency}/{period_text}\n"
 
         total_by_currency[server.currency] = total_by_currency.get(server.currency, 0) + server.price
@@ -290,7 +290,7 @@ def format_reminder(servers: list[Server]) -> str:
         elif days_left == 1:
             status = "⏰ ЗАВТРА"
         else:
-            status = f"📅 через {days_left} дн."
+            status = f"через {days_left} дн."
 
         text += f"{status_emoji} <b>{server.name}</b>\n"
         text += f"    {server.hosting} • {status}\n"
