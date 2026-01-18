@@ -756,9 +756,14 @@ async def cb_pay_edit_period(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("period_") & ~StateFilter(AddServerStates.period))
+@router.callback_query(F.data.startswith("period_"))
 async def process_pay_period(callback: CallbackQuery, state: FSMContext):
     """Обработка периода и завершение оплаты."""
+    # Пропускаем если это состояние добавления сервера (обрабатывается выше)
+    current_state = await state.get_state()
+    if current_state == AddServerStates.period:
+        return
+
     data = await state.get_data()
     server_id = data.get('pay_server_id')
 
