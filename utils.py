@@ -163,9 +163,11 @@ def format_server_list_sorted(servers: list[Server], sort_by: str = "date") -> s
 
         # Информация о сервере
         text += f"\n{status_emoji} <b>{server.name}</b>\n"
-        if server.location:
+        # При сортировке по полю — не показываем его (оно в заголовке группы)
+        if server.location and sort_by != "location":
             text += f"   {server.location}\n"
-        text += f"   {server.hosting}\n"
+        if sort_by != "hosting":
+            text += f"   {server.hosting}\n"
         text += f"   💰 {server.price:.0f} {server.currency}/{period_text} • {server.expiry_date.strftime('%d.%m')} ({status_text})\n"
 
     text += f"\n━━━━━━━━━━━━━━━━━━━━━━\n"
