@@ -12,10 +12,10 @@ DEFAULT_REMINDER_TIME = "10:00"
 MONITORING_INTERVAL_MINUTES = 5
 MONITORING_TIMEOUT_SECONDS = 10
 
-# Курсы валют к рублю (ЦБ РФ, январь 2026)
+# Курсы валют к рублю
 # Обновлять вручную или через API
 EXCHANGE_RATES = {
     "RUB": 1.0,
-    "USD": 78.0,
+    "USD": 83.0,
     "EUR": 91.0,
 }
