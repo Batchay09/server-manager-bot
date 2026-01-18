@@ -163,17 +163,9 @@ def format_server_list_sorted(servers: list[Server], sort_by: str = "date") -> s
 
         # Информация о сервере
         text += f"\n{status_emoji} <b>{server.name}</b>\n"
-
-        # Детали в зависимости от сортировки
-        if sort_by == "date":
-            location_str = f" • {server.location}" if server.location else ""
-            text += f"   {server.hosting}{location_str}\n"
-        elif sort_by == "hosting":
-            location_str = f" • {server.location}" if server.location else ""
-            text += f"   {location_str.lstrip(' • ') if location_str else ''}\n" if server.location else ""
-        else:  # location
-            text += f"   {server.hosting}\n"
-
+        if server.location:
+            text += f"   {server.location}\n"
+        text += f"   {server.hosting}\n"
         text += f"   💰 {server.price:.0f} {server.currency}/{period_text} • {server.expiry_date.strftime('%d.%m')} ({status_text})\n"
 
     text += f"\n━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -204,10 +196,10 @@ def format_expiring_servers(servers: list[Server]) -> str:
         period_text = get_period_text(server.payment_period)
 
         text += f"\n{status_emoji} <b>{server.name}</b>\n"
-        text += f"   {server.hosting}"
         if server.location:
-            text += f" • {server.location}"
-        text += f"\n   {server.expiry_date.strftime('%d.%m.%Y')} — {status_text}\n"
+            text += f"   {server.location}\n"
+        text += f"   {server.hosting}\n"
+        text += f"   {server.expiry_date.strftime('%d.%m.%Y')} — {status_text}\n"
         text += f"   💰 {server.price:.0f} {server.currency}/{period_text}\n"
 
         total_by_currency[server.currency] = total_by_currency.get(server.currency, 0) + server.price
