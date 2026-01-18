@@ -19,15 +19,15 @@ def get_status_emoji(days_left: int) -> str:
 def get_status_text(days_left: int) -> str:
     """Возвращает текст статуса."""
     if days_left < 0:
-        return "ПРОСРОЧЕНО"
+        return f"ПРОСРОЧЕНО ({abs(days_left)} дн.)"
     elif days_left == 0:
         return "СЕГОДНЯ"
     elif days_left == 1:
         return "ЗАВТРА"
     elif days_left <= 3:
-        return "СРОЧНО"
+        return f"СРОЧНО ({days_left} дн.)"
     elif days_left <= 7:
-        return "Скоро"
+        return f"Скоро ({days_left} дн.)"
     else:
         return f"{days_left} дн."
 

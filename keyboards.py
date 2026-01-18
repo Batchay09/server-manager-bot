@@ -256,6 +256,43 @@ def get_sort_keyboard(current_sort: str = "date") -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def get_payment_confirm_keyboard(server_id: int) -> InlineKeyboardMarkup:
+    """Клавиатура подтверждения оплаты."""
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="✅ Как обычно",
+            callback_data=f"pay_same_{server_id}"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="✏️ Изменились условия",
+            callback_data=f"pay_changed_{server_id}"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(text="↩️ Отмена", callback_data=f"server_{server_id}")
+    )
+    return builder.as_markup()
+
+
+def get_payment_change_keyboard(server_id: int) -> InlineKeyboardMarkup:
+    """Клавиатура выбора что изменилось при оплате."""
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="💰 Цена", callback_data=f"pay_edit_price_{server_id}"),
+        InlineKeyboardButton(text="📅 Период", callback_data=f"pay_edit_period_{server_id}")
+    )
+    builder.row(
+        InlineKeyboardButton(text="📆 Дата оплаты", callback_data=f"pay_edit_date_{server_id}")
+    )
+    builder.row(
+        InlineKeyboardButton(text="↩️ Назад", callback_data=f"paid_{server_id}")
+    )
+    return builder.as_markup()
+
+
 def get_server_list_keyboard_with_sort(servers: list[Server], current_sort: str = "date") -> InlineKeyboardMarkup:
     """Клавиатура списка серверов с сортировкой."""
     builder = InlineKeyboardBuilder()

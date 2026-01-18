@@ -10,7 +10,8 @@ from keyboards import (
     get_delete_confirm_keyboard, get_edit_server_keyboard, get_currency_keyboard,
     get_period_keyboard, get_cancel_keyboard, get_skip_keyboard, get_settings_keyboard,
     get_back_keyboard, get_hosting_choice_keyboard, get_location_choice_keyboard,
-    get_price_choice_keyboard, get_server_list_keyboard_with_sort
+    get_price_choice_keyboard, get_server_list_keyboard_with_sort,
+    get_payment_confirm_keyboard, get_payment_change_keyboard
 )
 from utils import (
     format_server_info, format_server_list_sorted, format_expiring_servers,
@@ -39,6 +40,12 @@ class AddServerStates(StatesGroup):
 
 class EditServerStates(StatesGroup):
     waiting_value = State()
+
+
+class PaymentStates(StatesGroup):
+    waiting_price = State()
+    waiting_currency = State()
+    waiting_date = State()
 
 
 @router.message(Command("start"))
@@ -544,15 +551,41 @@ async def cb_server_detail(callback: CallbackQuery):
 
 # === Оплата ===
 
-@router.callback_query(F.data.startswith("paid_"))
+@router.callback_query(F.data.startswith("paid_") & ~F.data.startswith("pay_"))
 async def cb_mark_paid(callback: CallbackQuery):
+    """Показывает диалог подтверждения оплаты."""
     server_id = int(callback.data.split("_")[1])
+    server = await db.get_server(server_id, callback.from_user.id)
+
+    if not server:
+        await callback.answer("❌ Сервер не найден", show_alert=True)
+        return
+
+    period_text = "месяц" if server.payment_period == "monthly" else "год"
+    text = (
+        f"💳 <b>Подтверждение оплаты</b>\n\n"
+        f"🖥 {server.name}\n"
+        f"💰 {server.price:.2f} {server.currency}/{period_text}\n\n"
+        f"Условия остались прежними?"
+    )
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_payment_confirm_keyboard(server_id),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("pay_same_"))
+async def cb_pay_same(callback: CallbackQuery):
+    """Оплата с теми же условиями."""
+    server_id = int(callback.data.split("_")[2])
     new_date = await db.mark_paid(server_id, callback.from_user.id)
 
     if new_date:
         server = await db.get_server(server_id, callback.from_user.id)
         text = f"✅ <b>Оплата отмечена!</b>\n\n"
-        text += f"📅 Новая дата: <b>{new_date.strftime('%d.%m.%Y')}</b>\n\n"
+        text += f"📅 Следующая оплата: <b>{new_date.strftime('%d.%m.%Y')}</b>\n\n"
         text += format_server_info(server, detailed=True)
         await callback.message.edit_text(
             text,
@@ -562,6 +595,185 @@ async def cb_mark_paid(callback: CallbackQuery):
         await callback.answer("✅ Оплата отмечена!")
     else:
         await callback.answer("❌ Ошибка", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("pay_changed_"))
+async def cb_pay_changed(callback: CallbackQuery):
+    """Показывает меню изменения условий оплаты."""
+    server_id = int(callback.data.split("_")[2])
+    server = await db.get_server(server_id, callback.from_user.id)
+
+    if not server:
+        await callback.answer("❌ Сервер не найден", show_alert=True)
+        return
+
+    text = (
+        f"✏️ <b>Что изменилось?</b>\n\n"
+        f"🖥 {server.name}\n\n"
+        f"Выберите что обновить:"
+    )
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_payment_change_keyboard(server_id),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("pay_edit_price_"))
+async def cb_pay_edit_price(callback: CallbackQuery, state: FSMContext):
+    """Запрос новой цены при оплате."""
+    server_id = int(callback.data.split("_")[3])
+    await state.set_state(PaymentStates.waiting_price)
+    await state.update_data(pay_server_id=server_id)
+
+    await callback.message.edit_text(
+        "💰 Введите <b>новую стоимость</b>:",
+        reply_markup=get_cancel_keyboard(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.message(PaymentStates.waiting_price)
+async def process_pay_price(message: Message, state: FSMContext):
+    """Обработка новой цены."""
+    price = parse_price(message.text.strip())
+    if price is None:
+        await message.answer(
+            "❌ Неверный формат\n\nВведите число: <b>1500</b> или <b>29.99</b>",
+            reply_markup=get_cancel_keyboard(),
+            parse_mode="HTML"
+        )
+        return
+
+    await state.update_data(pay_new_price=price)
+    await state.set_state(PaymentStates.waiting_currency)
+    await message.answer(
+        "💵 Выберите <b>валюту</b>:",
+        reply_markup=get_currency_keyboard(),
+        parse_mode="HTML"
+    )
+
+
+@router.callback_query(PaymentStates.waiting_currency, F.data.startswith("currency_"))
+async def process_pay_currency(callback: CallbackQuery, state: FSMContext):
+    """Обработка валюты и завершение оплаты с новой ценой."""
+    currency = callback.data.split("_")[1]
+    data = await state.get_data()
+    server_id = data['pay_server_id']
+    new_price = data['pay_new_price']
+
+    # Обновляем цену и отмечаем оплату
+    await db.update_server(server_id, callback.from_user.id, price=new_price, currency=currency)
+    new_date = await db.mark_paid(server_id, callback.from_user.id)
+
+    await state.clear()
+
+    server = await db.get_server(server_id, callback.from_user.id)
+    text = f"✅ <b>Оплата отмечена!</b>\n\n"
+    text += f"💰 Новая цена: <b>{new_price:.2f} {currency}</b>\n"
+    text += f"📅 Следующая оплата: <b>{new_date.strftime('%d.%m.%Y')}</b>\n\n"
+    text += format_server_info(server, detailed=True)
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_server_detail_keyboard(server),
+        parse_mode="HTML"
+    )
+    await callback.answer("✅ Оплата отмечена!")
+
+
+@router.callback_query(F.data.startswith("pay_edit_period_"))
+async def cb_pay_edit_period(callback: CallbackQuery, state: FSMContext):
+    """Выбор нового периода оплаты."""
+    server_id = int(callback.data.split("_")[3])
+    await state.update_data(pay_server_id=server_id)
+
+    await callback.message.edit_text(
+        "📆 Выберите <b>новый период оплаты</b>:",
+        reply_markup=get_period_keyboard(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("period_") & ~StateFilter(AddServerStates.period))
+async def process_pay_period(callback: CallbackQuery, state: FSMContext):
+    """Обработка периода и завершение оплаты."""
+    data = await state.get_data()
+    server_id = data.get('pay_server_id')
+
+    if not server_id:
+        await callback.answer()
+        return
+
+    period = callback.data.split("_")[1]
+
+    # Обновляем период и отмечаем оплату
+    await db.update_server(server_id, callback.from_user.id, payment_period=period)
+    new_date = await db.mark_paid(server_id, callback.from_user.id)
+
+    await state.clear()
+
+    server = await db.get_server(server_id, callback.from_user.id)
+    period_text = "ежемесячно" if period == "monthly" else "ежегодно"
+    text = f"✅ <b>Оплата отмечена!</b>\n\n"
+    text += f"📆 Новый период: <b>{period_text}</b>\n"
+    text += f"📅 Следующая оплата: <b>{new_date.strftime('%d.%m.%Y')}</b>\n\n"
+    text += format_server_info(server, detailed=True)
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_server_detail_keyboard(server),
+        parse_mode="HTML"
+    )
+    await callback.answer("✅ Оплата отмечена!")
+
+
+@router.callback_query(F.data.startswith("pay_edit_date_"))
+async def cb_pay_edit_date(callback: CallbackQuery, state: FSMContext):
+    """Запрос новой даты оплаты."""
+    server_id = int(callback.data.split("_")[3])
+    await state.set_state(PaymentStates.waiting_date)
+    await state.update_data(pay_server_id=server_id)
+
+    await callback.message.edit_text(
+        "📅 Введите <b>дату следующей оплаты</b>:\n"
+        "<i>Формат: ДД.ММ.ГГГГ</i>",
+        reply_markup=get_cancel_keyboard(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.message(PaymentStates.waiting_date)
+async def process_pay_date(message: Message, state: FSMContext):
+    """Обработка новой даты оплаты."""
+    date_obj = parse_date(message.text.strip())
+    if not date_obj:
+        await message.answer(
+            "❌ Неверный формат даты\n\nИспользуйте: <b>ДД.ММ.ГГГГ</b>",
+            reply_markup=get_cancel_keyboard(),
+            parse_mode="HTML"
+        )
+        return
+
+    data = await state.get_data()
+    server_id = data['pay_server_id']
+
+    # Обновляем дату напрямую
+    await db.update_server(server_id, message.from_user.id, expiry_date=date_obj)
+
+    await state.clear()
+
+    server = await db.get_server(server_id, message.from_user.id)
+    text = f"✅ <b>Оплата отмечена!</b>\n\n"
+    text += f"📅 Следующая оплата: <b>{date_obj.strftime('%d.%m.%Y')}</b>\n\n"
+    text += format_server_info(server, detailed=True)
+    await message.answer(
+        text,
+        reply_markup=get_server_detail_keyboard(server),
+        parse_mode="HTML"
+    )
 
 
 # === Удаление ===
