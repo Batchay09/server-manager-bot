@@ -8,7 +8,7 @@ from aiogram.enums import ParseMode
 
 from config import BOT_TOKEN
 from database import init_db
-from handlers import servers_router, stats_router
+from handlers import servers_router, stats_router, hosting_router
 from services.scheduler import setup_scheduler
 from services.monitoring import MonitoringService
 
@@ -39,6 +39,7 @@ async def main():
     # Регистрация роутеров
     dp.include_router(servers_router)
     dp.include_router(stats_router)
+    dp.include_router(hosting_router)
 
     # Настройка планировщика напоминаний
     scheduler = setup_scheduler(bot)

@@ -32,6 +32,15 @@ class UserSettings:
     reminder_time: str
 
 
+@dataclass
+class HostingAPIKey:
+    id: int
+    user_id: int
+    provider: str  # 4vps, hetzner, etc.
+    api_key: str
+    created_at: datetime
+
+
 async def init_db():
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("""
@@ -75,6 +84,26 @@ async def init_db():
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_servers_expiry ON servers(expiry_date)
         """)
+
+        # Таблица API ключей хостингов
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                provider TEXT NOT NULL,
+                api_key TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, provider)
+            )
+        """)
+
+        # Добавляем external_id для связи с хостингом
+        cursor = await db.execute("PRAGMA table_info(servers)")
+        columns = [row[1] for row in await cursor.fetchall()]
+        if 'external_id' not in columns:
+            await db.execute("ALTER TABLE servers ADD COLUMN external_id TEXT")
+        if 'provider' not in columns:
+            await db.execute("ALTER TABLE servers ADD COLUMN provider TEXT")
 
         await db.commit()
 
@@ -339,6 +368,120 @@ class Database:
             )
             rows = await cursor.fetchall()
             return [(row[0], row[1]) for row in rows]
+
+    # === API Keys ===
+
+    async def save_api_key(self, user_id: int, provider: str, api_key: str) -> bool:
+        """Сохранить или обновить API ключ."""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                INSERT INTO api_keys (user_id, provider, api_key)
+                VALUES (?, ?, ?)
+                ON CONFLICT(user_id, provider) DO UPDATE SET
+                    api_key = excluded.api_key,
+                    created_at = CURRENT_TIMESTAMP
+                """,
+                (user_id, provider.lower(), api_key)
+            )
+            await db.commit()
+            return True
+
+    async def get_api_key(self, user_id: int, provider: str) -> Optional[str]:
+        """Получить API ключ пользователя."""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT api_key FROM api_keys WHERE user_id = ? AND provider = ?",
+                (user_id, provider.lower())
+            )
+            row = await cursor.fetchone()
+            return row[0] if row else None
+
+    async def get_user_api_keys(self, user_id: int) -> list[HostingAPIKey]:
+        """Получить все API ключи пользователя."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM api_keys WHERE user_id = ?",
+                (user_id,)
+            )
+            rows = await cursor.fetchall()
+            return [
+                HostingAPIKey(
+                    id=row['id'],
+                    user_id=row['user_id'],
+                    provider=row['provider'],
+                    api_key=row['api_key'],
+                    created_at=datetime.fromisoformat(row['created_at']) if isinstance(row['created_at'], str) else row['created_at']
+                )
+                for row in rows
+            ]
+
+    async def delete_api_key(self, user_id: int, provider: str) -> bool:
+        """Удалить API ключ."""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "DELETE FROM api_keys WHERE user_id = ? AND provider = ?",
+                (user_id, provider.lower())
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def get_server_by_external_id(self, user_id: int, provider: str, external_id: str) -> Optional[Server]:
+        """Найти сервер по external_id от хостинга."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM servers WHERE user_id = ? AND provider = ? AND external_id = ?",
+                (user_id, provider.lower(), external_id)
+            )
+            row = await cursor.fetchone()
+            if row:
+                return self._row_to_server(row)
+            return None
+
+    async def add_or_update_server_from_hosting(
+        self,
+        user_id: int,
+        provider: str,
+        external_id: str,
+        name: str,
+        expiry_date: date,
+        price: float,
+        currency: str = "RUB",
+        ip: Optional[str] = None,
+        location: Optional[str] = None
+    ) -> int:
+        """Добавить или обновить сервер из хостинга."""
+        existing = await self.get_server_by_external_id(user_id, provider, external_id)
+
+        if existing:
+            # Обновляем существующий
+            await self.update_server(
+                existing.id,
+                user_id,
+                name=name,
+                expiry_date=expiry_date,
+                price=price,
+                currency=currency,
+                ip=ip,
+                location=location
+            )
+            return existing.id
+        else:
+            # Создаём новый
+            async with aiosqlite.connect(self.db_path) as db:
+                cursor = await db.execute(
+                    """
+                    INSERT INTO servers (user_id, name, hosting, location, ip, expiry_date,
+                                         price, currency, payment_period, provider, external_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (user_id, name, provider.upper(), location, ip, expiry_date.isoformat(),
+                     price, currency, "monthly", provider.lower(), external_id)
+                )
+                await db.commit()
+                return cursor.lastrowid
 
     def _row_to_server(self, row) -> Server:
         expiry = row['expiry_date']

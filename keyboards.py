@@ -29,6 +29,9 @@ def get_main_menu() -> InlineKeyboardMarkup:
     )
     builder.row(
         InlineKeyboardButton(text="📊 Статистика", callback_data="stats"),
+        InlineKeyboardButton(text="🔗 Интеграции", callback_data="hosting_menu")
+    )
+    builder.row(
         InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings")
     )
     return builder.as_markup()
