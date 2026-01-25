@@ -93,13 +93,13 @@ def format_server_info(server: Server, detailed: bool = False) -> str:
     text += f"├ 🏢 {server.hosting}\n"
     if server.location:
         text += f"├ 📍 {server.location}\n"
+    if server.ip:
+        text += f"├ 🌐 <code>{server.ip}</code>\n"
     text += f"├ 💰 {server.price:.0f} {server.currency}/{period_text}\n"
     text += f"└ {server.expiry_date.strftime('%d.%m.%Y')} • {status_text}\n"
 
     if detailed:
         extras = []
-        if server.ip:
-            extras.append(f"├ 🌐 <code>{server.ip}</code>")
         if server.url:
             extras.append(f"├ 🔗 {server.url}")
         if server.notes:

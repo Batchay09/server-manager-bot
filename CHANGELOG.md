@@ -5,6 +5,12 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.0.0/),
 проект следует [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [1.9.1] - 2026-01-25
+
+### Изменено
+- IP-адрес сервера теперь отображается в основной секции "Информация"
+- Убран пароль SSH из CLAUDE.md, добавлены переменные окружения VPS_HOST/VPS_USER/VPS_PASS
+
 ## [1.9.0] - 2026-01-20
 
 ### Добавлено
