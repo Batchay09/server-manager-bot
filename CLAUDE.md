@@ -42,12 +42,10 @@ Copy `.env.example` to `.env` and set `BOT_TOKEN` from @BotFather.
 
 ## Быстрые команды
 
-**"деплой"** — только залить на VPS для проверки:
+**"деплой"** — залить на VPS:
 ```bash
-sshpass -p "$VPS_PASS" ssh $VPS_USER@$VPS_HOST "cd /opt/server-manager-bot && git pull && systemctl restart server-bot"
+source .env && export SSHPASS="$VPS_PASS" && sshpass -e ssh $VPS_USER@$VPS_HOST "cd /opt/server-manager-bot && git pull && systemctl restart server-bot"
 ```
-
-Перед деплоем загрузи переменные: `source .env`
 
 **"релиз"** — полный цикл выпуска (обязательно при коммите):
 1. Инкремент VERSION (semver: MAJOR/MINOR/PATCH)
