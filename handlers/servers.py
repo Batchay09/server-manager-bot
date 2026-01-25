@@ -17,6 +17,7 @@ from utils import (
     format_server_info, format_server_list_sorted, format_expiring_servers,
     parse_date, parse_price, get_period_text
 )
+from security import is_valid_ip, is_safe_url, is_safe_ip_for_monitoring, sanitize_text
 
 router = Router()
 
@@ -413,7 +414,20 @@ async def process_period_custom(message: Message, state: FSMContext):
 
 @router.message(AddServerStates.ip)
 async def process_ip(message: Message, state: FSMContext):
-    await state.update_data(ip=message.text.strip())
+    ip = message.text.strip()
+
+    # Валидация IP
+    if not is_valid_ip(ip):
+        await message.answer(
+            "❌ Некорректный IP адрес\n\n"
+            "Введите правильный IPv4 или IPv6 адрес\n"
+            "<i>Например: 185.16.32.11</i>",
+            reply_markup=get_skip_keyboard("ip"),
+            parse_mode="HTML"
+        )
+        return
+
+    await state.update_data(ip=ip)
     await state.set_state(AddServerStates.url)
     await message.answer(
         "🔗 Введите <b>URL</b> для мониторинга:\n"
@@ -438,7 +452,21 @@ async def skip_ip(callback: CallbackQuery, state: FSMContext):
 
 @router.message(AddServerStates.url)
 async def process_url(message: Message, state: FSMContext):
-    await state.update_data(url=message.text.strip())
+    url = message.text.strip()
+
+    # Валидация URL (защита от SSRF)
+    is_safe, error = is_safe_url(url)
+    if not is_safe:
+        await message.answer(
+            f"❌ Некорректный URL\n\n{error}\n\n"
+            "Введите публичный URL\n"
+            "<i>Например: https://example.com</i>",
+            reply_markup=get_skip_keyboard("url"),
+            parse_mode="HTML"
+        )
+        return
+
+    await state.update_data(url=url)
     await state.set_state(AddServerStates.notes)
     await message.answer(
         "📋 Введите <b>заметки</b>:\n"
@@ -502,20 +530,30 @@ async def finish_add_server(event: Message | CallbackQuery, state: FSMContext):
     data = await state.get_data()
     user_id = event.from_user.id
 
-    server_id = await db.add_server(
-        user_id=user_id,
-        name=data['name'],
-        hosting=data['hosting'],
-        expiry_date=data['expiry_date'],
-        price=data['price'],
-        currency=data['currency'],
-        payment_period=data['period'],
-        location=data.get('location'),
-        ip=data.get('ip'),
-        url=data.get('url'),
-        notes=data.get('notes'),
-        tags=data.get('tags')
-    )
+    try:
+        server_id = await db.add_server(
+            user_id=user_id,
+            name=sanitize_text(data['name'], 100),
+            hosting=sanitize_text(data['hosting'], 100),
+            expiry_date=data['expiry_date'],
+            price=data['price'],
+            currency=data['currency'],
+            payment_period=data['period'],
+            location=sanitize_text(data.get('location') or '', 100) or None,
+            ip=data.get('ip'),
+            url=data.get('url'),
+            notes=sanitize_text(data.get('notes') or '', 500) or None,
+            tags=sanitize_text(data.get('tags') or '', 200) or None
+        )
+    except ValueError as e:
+        await state.clear()
+        error_text = f"❌ <b>Ошибка</b>\n\n{str(e)}"
+        if isinstance(event, CallbackQuery):
+            await event.message.edit_text(error_text, reply_markup=get_main_menu(), parse_mode="HTML")
+            await event.answer("Ошибка!")
+        else:
+            await event.answer(error_text, reply_markup=get_main_menu(), parse_mode="HTML")
+        return
 
     await state.clear()
 
@@ -1043,7 +1081,20 @@ async def cb_toggle_monitoring(callback: CallbackQuery):
         await callback.answer("⚠️ Для мониторинга нужен IP или URL", show_alert=True)
         return
 
+    # При включении мониторинга проверяем безопасность IP/URL
     new_value = not server.is_monitoring
+    if new_value:
+        if server.url:
+            is_safe, error = is_safe_url(server.url)
+            if not is_safe:
+                await callback.answer(f"⚠️ URL небезопасен: {error}", show_alert=True)
+                return
+        if server.ip:
+            is_safe, error = is_safe_ip_for_monitoring(server.ip)
+            if not is_safe:
+                await callback.answer(f"⚠️ IP небезопасен: {error}", show_alert=True)
+                return
+
     await db.update_server(server_id, callback.from_user.id, is_monitoring=new_value)
 
     server = await db.get_server(server_id, callback.from_user.id)

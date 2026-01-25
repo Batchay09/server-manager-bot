@@ -3,7 +3,8 @@ from datetime import datetime, date
 from typing import Optional
 from dataclasses import dataclass
 
-from config import DATABASE_PATH
+from config import DATABASE_PATH, MAX_SERVERS_PER_USER
+from security import encrypt_api_key, decrypt_api_key
 
 
 @dataclass
@@ -112,6 +113,16 @@ class Database:
     def __init__(self, db_path: str = DATABASE_PATH):
         self.db_path = db_path
 
+    async def get_server_count(self, user_id: int) -> int:
+        """Возвращает количество серверов пользователя."""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM servers WHERE user_id = ?",
+                (user_id,)
+            )
+            row = await cursor.fetchone()
+            return row[0] if row else 0
+
     async def add_server(
         self,
         user_id: int,
@@ -127,6 +138,11 @@ class Database:
         notes: Optional[str] = None,
         tags: Optional[str] = None
     ) -> int:
+        # Проверка лимита серверов
+        count = await self.get_server_count(user_id)
+        if count >= MAX_SERVERS_PER_USER:
+            raise ValueError(f"Превышен лимит серверов ({MAX_SERVERS_PER_USER})")
+
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
                 """
@@ -372,7 +388,8 @@ class Database:
     # === API Keys ===
 
     async def save_api_key(self, user_id: int, provider: str, api_key: str) -> bool:
-        """Сохранить или обновить API ключ."""
+        """Сохранить или обновить API ключ (с шифрованием)."""
+        encrypted_key = encrypt_api_key(api_key)
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 """
@@ -382,20 +399,22 @@ class Database:
                     api_key = excluded.api_key,
                     created_at = CURRENT_TIMESTAMP
                 """,
-                (user_id, provider.lower(), api_key)
+                (user_id, provider.lower(), encrypted_key)
             )
             await db.commit()
             return True
 
     async def get_api_key(self, user_id: int, provider: str) -> Optional[str]:
-        """Получить API ключ пользователя."""
+        """Получить API ключ пользователя (с расшифровкой)."""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
                 "SELECT api_key FROM api_keys WHERE user_id = ? AND provider = ?",
                 (user_id, provider.lower())
             )
             row = await cursor.fetchone()
-            return row[0] if row else None
+            if row:
+                return decrypt_api_key(row[0])
+            return None
 
     async def get_user_api_keys(self, user_id: int) -> list[HostingAPIKey]:
         """Получить все API ключи пользователя."""

@@ -5,6 +5,26 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.0.0/),
 проект следует [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.0.0] - 2026-01-25
+
+### Добавлено
+- **Шифрование API ключей** — ключи хостингов шифруются AES-256 (Fernet)
+- **Rate limiting** — защита от флуда (настраивается RATE_LIMIT_SECONDS)
+- **Контроль доступа** — whitelist пользователей (ALLOWED_USERS)
+- **Лимит серверов** — ограничение на пользователя (MAX_SERVERS_PER_USER)
+- **Валидация IP** — проверка корректности IP-адресов при вводе
+- **Защита от SSRF** — валидация URL, блокировка приватных IP и localhost
+- Модуль `security.py` с функциями шифрования и валидации
+- Модуль `middleware.py` с middleware безопасности
+
+### Изменено
+- Мониторинг проверяет безопасность IP/URL перед запросами
+- API ключи шифруются перед сохранением в БД
+
+### Безопасность
+- Новые переменные окружения: ENCRYPTION_KEY, ALLOWED_USERS, MAX_SERVERS_PER_USER, RATE_LIMIT_SECONDS
+- Обязательно установить ENCRYPTION_KEY для продакшена
+
 ## [1.9.1] - 2026-01-25
 
 ### Изменено

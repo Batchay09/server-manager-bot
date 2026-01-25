@@ -7,6 +7,7 @@ from aiogram import Bot
 
 from database import db, Server
 from config import MONITORING_INTERVAL_MINUTES, MONITORING_TIMEOUT_SECONDS
+from security import is_safe_url, is_safe_ip_for_monitoring
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +66,18 @@ class MonitoringService:
     async def _check_server(self, server: Server) -> bool:
         """Проверяет доступность сервера."""
         if server.url:
+            # Проверка безопасности URL
+            is_safe, _ = is_safe_url(server.url)
+            if not is_safe:
+                logger.warning(f"Skipping unsafe URL for server {server.id}: {server.url}")
+                return False
             return await self._check_url(server.url)
         elif server.ip:
+            # Проверка безопасности IP
+            is_safe, _ = is_safe_ip_for_monitoring(server.ip)
+            if not is_safe:
+                logger.warning(f"Skipping unsafe IP for server {server.id}: {server.ip}")
+                return False
             return await self._check_ip(server.ip)
         return False
 
